@@ -15,9 +15,9 @@ env/
 .env.local
 
 # IDE
-.vscode/
 .idea/
 *.swp
+# Note: .vscode/ is committed for shared workspace settings
 
 # Testing
 .pytest_cache/
