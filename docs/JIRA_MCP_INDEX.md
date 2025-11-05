@@ -442,15 +442,26 @@ git init
 
 ## 📞 Document Locations
 
-All documents are in: `/root/projects/swisper_studio/docs/`
+All documents are in: `/root/projects/jira-mcp-cursor/docs/`
 
-1. `JIRA_MCP_BUSINESS_ROADMAP.md` ⭐ Start here
-2. `jira-mcp-cursor-extension-design.md` 🎨 Product/UX
-3. `jira-mcp-server-design.md` 📘 Architecture
-4. `jira-mcp-server-implementation-example.md` 💻 Code
-5. `jira-mcp-server-decision-guide.md` 🧭 Decisions
-6. `jira-mcp-server-quick-reference.md` ⚡ Reference
-7. `JIRA_MCP_INDEX.md` 📚 This file
+### Root Level (Overview)
+1. `README.md` 📖 Documentation guide
+2. `JIRA_MCP_INDEX.md` 📚 This file - Complete navigation
+3. `JIRA_MCP_SERVER_README.md` 📋 Project overview
+4. `JIRA_MCP_BUSINESS_ROADMAP.md` ⭐ Business strategy & roadmap
+
+### Design Documents (`design/`)
+5. `design/jira-mcp-server-design.md` 📘 Technical architecture
+6. `design/jira-mcp-cursor-extension-design.md` 🎨 Product/UX design
+
+### Guides (`guides/`)
+7. `guides/jira-mcp-server-decision-guide.md` 🧭 Architecture decisions
+
+### Reference (`reference/`)
+8. `reference/jira-mcp-server-quick-reference.md` ⚡ Quick lookup
+
+### Examples (`examples/`)
+9. `examples/jira-mcp-server-implementation-example.md` 💻 Code samples
 
 ---
 
