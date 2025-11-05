@@ -1,0 +1,448 @@
+---
+description: Common mistakes and junior-safe rules - always check these
+globs: "*.py,*.ts,*.tsx,*.js,*.json"
+alwaysApply: true
+---
+
+# Common Mistakes (Junior-Safe Rules)
+
+**Applied to:** All code and config files.
+
+**Purpose:** Catch common errors before they reach production.
+
+---
+
+## 1. Remove Debug Statements
+
+### ❌ DON'T Leave Debug Code
+
+```python
+# ❌ Remove before committing!
+print(f"Debug: user = {user}")
+print(f"Response: {response}")
+console.log("TODO: Fix this later")
+```
+
+### ✅ DO: Use Proper Logging
+
+```python
+# ✅ Structured logging
+logger.debug(
+    "Processing user",
+    extra={"user_id": user.id, "correlation_id": correlation_id}
+)
+```
+
+**Check before commit:**
+- [ ] No `print()` statements in Python
+- [ ] No `console.log()` in JavaScript/TypeScript
+- [ ] No commented "TODO" hacks
+- [ ] No temporary debug files
+
+---
+
+## 2. Never Commit Secrets
+
+### ❌ NEVER COMMIT
+
+```python
+# ❌ SECURITY VIOLATION!
+API_KEY = "sk_live_abc123xyz"
+DATABASE_URL = "postgresql://user:password@host/db"
+OPENAI_API_KEY = "sk-proj-abc..."
+```
+
+```json
+// ❌ In config.json
+{
+  "apiKey": "secret_key_here",
+  "password": "admin123"
+}
+```
+
+### ✅ DO: Use Environment Variables
+
+```python
+# ✅ Load from environment
+API_KEY = os.getenv("API_KEY")
+if not API_KEY:
+    raise ValueError("API_KEY not set")
+```
+
+**Protection:**
+- Use `.env` files (in `.gitignore`)
+- Enable pre-commit hooks for secret scanning
+- Review sensitive files before pushing
+- Use secret management services
+
+**Pre-commit check:**
+```bash
+# Install git-secrets or similar
+pip install detect-secrets
+detect-secrets scan
+```
+
+---
+
+## 3. Type Hints: Always Include Them
+
+### ❌ DON'T: Missing Type Hints
+
+```python
+# ❌ No type hints
+def calculate_total(items, tax_rate):
+    return sum(item.price for item in items) * (1 + tax_rate)
+```
+
+### ✅ DO: Full Type Annotations
+
+```python
+# ✅ With type hints
+from typing import List
+from decimal import Decimal
+
+def calculate_total(
+    items: List[OrderItem],
+    tax_rate: Decimal
+) -> Decimal:
+    subtotal = sum(item.price for item in items)
+    return subtotal * (Decimal("1") + tax_rate)
+```
+
+**Run type checkers:**
+```bash
+# Python
+mypy .
+pyright .
+
+# TypeScript
+tsc --noEmit
+```
+
+---
+
+## 4. Clear Error Messages
+
+### ❌ DON'T: Vague Errors
+
+```python
+# ❌ Unhelpful
+raise ValueError("Invalid input")
+raise Exception("Error")
+return {"error": "Something went wrong"}
+```
+
+### ✅ DO: Actionable Messages with Context
+
+```python
+# ✅ Clear and actionable
+raise ValueError(
+    f"Invalid email format: '{email}'. "
+    f"Expected format: user@example.com"
+)
+
+# ✅ With correlation ID
+raise PaymentError(
+    f"Payment failed for order {order_id}: {reason}. "
+    f"Correlation ID: {correlation_id}"
+)
+```
+
+**Good error messages include:**
+- What went wrong
+- What was expected
+- What was received
+- How to fix it
+- Correlation ID for tracing
+
+---
+
+## 5. Never Swallow Exceptions
+
+### ❌ DON'T: Silent Failures
+
+```python
+# ❌ Silent failure - NEVER DO THIS!
+try:
+    risky_operation()
+except Exception:
+    pass  # Silently fails!
+
+# ❌ Also bad
+except Exception as e:
+    print(f"Error: {e}")  # Lost forever
+```
+
+### ✅ DO: Log and Re-raise
+
+```python
+# ✅ Log with context
+try:
+    risky_operation()
+except ValueError as e:
+    logger.error(
+        "Operation failed",
+        extra={
+            "error": str(e),
+            "correlation_id": correlation_id,
+            "context": context_data
+        }
+    )
+    raise  # Re-raise for caller to handle
+
+# ✅ Or return typed error
+except Exception as e:
+    logger.exception("Unexpected error in risky_operation")
+    return Result(success=False, error=str(e))
+```
+
+---
+
+## 6. Write Tests for Logic Changes
+
+### ✅ DO: At Least One Test Per Change
+
+```python
+# ✅ When you add a function
+def calculate_discount(price: Decimal, tier: str) -> Decimal:
+    """Calculate tiered discount."""
+    if tier == "gold":
+        return price * Decimal("0.2")
+    elif tier == "silver":
+        return price * Decimal("0.1")
+    return Decimal("0")
+
+# ✅ Write tests for it
+@pytest.mark.parametrize("tier,expected", [
+    ("gold", Decimal("20")),     # 20% of 100
+    ("silver", Decimal("10")),   # 10% of 100
+    ("bronze", Decimal("0")),    # no discount
+])
+def test_calculate_discount(tier, expected):
+    result = calculate_discount(Decimal("100"), tier)
+    assert result == expected
+```
+
+**Minimum test coverage:**
+- Happy path (valid input)
+- Edge cases (boundary values)
+- Error cases (invalid input)
+
+**CRITICAL: Always RUN tests in Docker containers (VERBOSE mode):**
+
+```bash
+# BEFORE running tests: Update container with latest code
+docker compose cp backend/app/. backend:/code/app/
+docker compose cp backend/tests/. backend:/code/tests/
+
+# EXECUTE tests in Docker container with verbose output (-vv)
+docker compose exec backend pytest tests/test_my_feature.py -vv
+
+# Watch terminal output to see test progress
+# Must verify they fail (red) before implementing
+# Then run again after implementation to verify they pass (green)
+```
+
+**Why Docker containers?**
+- ✅ Tests run with real infrastructure (database, Redis, etc.)
+- ✅ Same environment as CI/production
+- ✅ Isolated from local environment
+
+**Why verbose (-vv)?**
+- ✅ See which tests are running in real-time
+- ✅ See test names and progress
+- ✅ See specific failures and assertion messages
+- ✅ Developer can follow what's happening in terminal
+
+**When to rebuild vs. copy?**
+- Use `docker compose cp` for code-only changes (fast)
+- Use `docker compose build backend` for dependency changes (slower but necessary)
+
+---
+
+### ✅ DO: Mark CI-Critical Tests
+
+**Important:** Use real infrastructure for comprehensive tests, but mark only critical ones for CI.
+
+```python
+# ✅ CI-critical test (fast, golden path)
+@pytest.mark.ci_critical
+@pytest.mark.asyncio
+async def test_user_creation_basic(db):
+    """CI: Basic user creation works"""
+    user = await create_user(email="test@example.com", name="Test")
+    assert user.email == "test@example.com"
+
+# ✅ Comprehensive test (skip in CI - uses real LLM)
+import os
+
+pytestmark = pytest.mark.skipif(
+    os.getenv("CI") == "true",
+    reason="CI: Uses real LLM calls - run locally only"
+)
+
+@pytest.mark.asyncio
+async def test_fact_extraction_comprehensive(db, test_user):
+    """Comprehensive: 10+ scenarios with real LLM"""
+    # Expensive but thorough - run locally
+    pass
+```
+
+**CI Strategy:**
+- **Goal:** CI in <5 minutes
+- **Per domain:** 1-2 critical tests only
+- **Skip:** Expensive LLM tests, edge case variations, performance tests
+- **Run locally:** Full comprehensive suite with `pytest -v`
+
+**pytest.ini configuration:**
+```ini
+[pytest]
+markers =
+    ci_critical: Critical tests that run in CI (fast, golden path)
+    asyncio: Async tests
+    performance: Performance/load tests (skip in CI)
+```
+
+**Run CI tests only:**
+```bash
+pytest -m ci_critical
+```
+
+**Run all tests locally:**
+```bash
+pytest -v
+```
+
+---
+
+## 7. Redact PII in Logs
+
+### ❌ DON'T: Log Sensitive Data
+
+```python
+# ❌ Exposes PII
+logger.info(f"User email: {user.email}")
+logger.info(f"Password reset for: {user.ssn}")
+logger.info(f"Payment details: {card_number}")
+```
+
+### ✅ DO: Redact or Hash
+
+```python
+# ✅ Hash identifiers
+import hashlib
+
+def hash_pii(value: str) -> str:
+    return hashlib.sha256(value.encode()).hexdigest()[:8]
+
+logger.info(
+    "User login",
+    extra={
+        "user_id_hash": hash_pii(user.email),
+        "correlation_id": correlation_id
+    }
+)
+
+# ✅ Or use placeholders
+logger.info(
+    "Password reset",
+    extra={
+        "user_id": user.id,  # ID, not email!
+        "timestamp": datetime.now().isoformat()
+    }
+)
+```
+
+**Never log:**
+- Passwords (hashed or plain)
+- Credit card numbers
+- SSNs or national IDs
+- Full email addresses (use hashed)
+- API keys or tokens
+
+---
+
+## 8. Minimal Dependencies
+
+### ✅ DO: Review New Packages
+
+Before adding a new dependency:
+
+**Ask yourself:**
+1. Is it actively maintained?
+2. Does it have good documentation?
+3. What's the download count? (npm/PyPI)
+4. Are there security vulnerabilities?
+5. Can we implement it ourselves in <50 lines?
+
+**Check:**
+```bash
+# Python - check package info
+pip show package-name
+
+# Check for security issues
+pip-audit
+safety check
+
+# JavaScript/TypeScript
+npm audit
+```
+
+**Get approval for:**
+- New dependencies (especially small/niche packages)
+- Major version updates
+- Replacing existing dependencies
+
+---
+
+## Pre-Commit Checklist
+
+Before committing code, verify:
+
+- [ ] **No debug statements** (`print`, `console.log`)
+- [ ] **No secrets committed** (API keys, passwords)
+- [ ] **Type hints added** (Python/TypeScript)
+- [ ] **Error messages are clear** (include context, correlation ID)
+- [ ] **Exceptions are logged** (not swallowed)
+- [ ] **Tests added** (at least one per logic change)
+- [ ] **PII redacted in logs** (no emails, cards, SSNs)
+- [ ] **Dependencies reviewed** (if added new packages)
+- [ ] **Linting passes** (`black`, `ruff`, `eslint`, `prettier`)
+- [ ] **Type checking passes** (`mypy`, `tsc`)
+
+---
+
+## Automated Checks
+
+### Set Up Pre-Commit Hooks
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    hooks:
+      - id: check-added-large-files
+      - id: check-json
+      - id: check-yaml
+      - id: detect-private-key  # Catch secrets!
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  - repo: https://github.com/psf/black
+    hooks:
+      - id: black
+
+  - repo: https://github.com/charliermarsh/ruff-pre-commit
+    hooks:
+      - id: ruff
+```
+
+**Install:**
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+---
+
+**Remember:** Small mistakes = big problems in production! ⚠️

@@ -1,0 +1,234 @@
+---
+description: Control flow and logic standards
+globs: "*.py,*.ts,*.tsx,*.js"
+alwaysApply: true
+---
+
+# Control Flow & Logic
+
+**Applied to:** All code files.
+
+---
+
+## Nesting Depth: Max 3 Levels
+
+```python
+# ❌ Too deep (4 levels)
+def process_orders(orders):
+    for order in orders:                    # 1
+        if order.status == "pending":      # 2
+            for item in order.items:        # 3
+                if item.in_stock:          # 4 - VIOLATION!
+                    ship(item)
+
+# ✅ Extract to helpers (max 3)
+def process_orders(orders):
+    pending_orders = [o for o in orders if o.status == "pending"]
+    for order in pending_orders:
+        process_pending_order(order)
+
+def process_pending_order(order):
+    for item in order.items:
+        if item.in_stock:
+            ship(item)
+```
+
+---
+
+## Early Returns & Guard Clauses
+
+### ✅ Prefer Early Returns
+
+```python
+# ❌ Nested if-else pyramid
+def get_user_discount(user):
+    if user:
+        if user.is_active:
+            if user.loyalty_tier == "gold":
+                return 0.2
+            else:
+                return 0.1
+        else:
+            return 0.0
+    else:
+        return 0.0
+
+# ✅ Guard clauses
+def get_user_discount(user):
+    if not user or not user.is_active:
+        return 0.0
+    
+    if user.loyalty_tier == "gold":
+        return 0.2
+    
+    return 0.1
+```
+
+---
+
+## Strategy Pattern Over Long If-Chains
+
+```python
+# ❌ Long if-elif chain
+def calculate_shipping(method):
+    if method == "express":
+        return 29.99
+    elif method == "standard":
+        return 9.99
+    elif method == "economy":
+        return 4.99
+    elif method == "pickup":
+        return 0.0
+    else:
+        raise ValueError(f"Unknown method: {method}")
+
+# ✅ Strategy map
+SHIPPING_RATES = {
+    "express": 29.99,
+    "standard": 9.99,
+    "economy": 4.99,
+    "pickup": 0.0,
+}
+
+def calculate_shipping(method: str) -> Decimal:
+    if method not in SHIPPING_RATES:
+        raise ValueError(f"Unknown shipping method: {method}")
+    return SHIPPING_RATES[method]
+```
+
+---
+
+## One Exit Point (Except Guards)
+
+```python
+# ✅ Single exit point (after guards)
+def process_payment(amount: Decimal, user: User) -> PaymentResult:
+    # Guards can return early
+    if amount <= 0:
+        return PaymentResult(success=False, error="Invalid amount")
+    if not user.has_payment_method():
+        return PaymentResult(success=False, error="No payment method")
+    
+    # Main logic has single exit
+    result = charge_payment(amount, user.payment_method)
+    log_payment(result)
+    return result
+```
+
+---
+
+## Exception Handling
+
+### ✅ DO: Never Swallow Exceptions
+
+```python
+# ❌ Silent failure
+try:
+    risky_operation()
+except Exception:
+    pass  # NEVER DO THIS!
+
+# ✅ Log with context
+try:
+    risky_operation()
+except ValueError as e:
+    logger.error(
+        "Failed to process order",
+        extra={
+            "error": str(e),
+            "order_id": order.id,
+            "correlation_id": correlation_id
+        }
+    )
+    raise  # Re-raise or return error type
+```
+
+### ✅ DO: Use Typed Errors
+
+```python
+# ✅ Typed exceptions
+class InvalidOrderError(ValueError):
+    """Order validation failed."""
+    pass
+
+class PaymentFailedError(Exception):
+    """Payment processing failed."""
+    pass
+
+# Caller can handle specifically
+try:
+    process_order(order)
+except InvalidOrderError as e:
+    return {"error": "validation", "details": str(e)}
+except PaymentFailedError as e:
+    return {"error": "payment", "details": str(e)}
+```
+
+---
+
+## Input Validation
+
+### ✅ DO: Validate Early, Fail Fast
+
+```python
+# ✅ Validate at entry
+def create_user(email: str, age: int) -> User:
+    # Validate immediately
+    if not email or "@" not in email:
+        raise ValueError(f"Invalid email: {email}")
+    if age < 0 or age > 150:
+        raise ValueError(f"Invalid age: {age}")
+    
+    # Proceed with valid data
+    return User(email=email, age=age)
+```
+
+---
+
+## Constants & Configuration
+
+### ❌ DON'T: Inline Magic Values
+
+```python
+# ❌ Magic numbers
+if user.score > 750:
+    approve_loan()
+
+if response.status == 429:
+    retry()
+```
+
+### ✅ DO: Named Constants
+
+```python
+# ✅ Named constants
+CREDIT_SCORE_THRESHOLD = 750
+HTTP_STATUS_TOO_MANY_REQUESTS = 429
+
+if user.score > CREDIT_SCORE_THRESHOLD:
+    approve_loan()
+
+if response.status == HTTP_STATUS_TOO_MANY_REQUESTS:
+    retry()
+```
+
+### ✅ DO: Config/Enums/Schemas
+
+```python
+# ✅ Configuration
+class LoanConfig:
+    CREDIT_THRESHOLD = 750
+    MAX_LOAN_AMOUNT = 100_000
+    DEFAULT_TERM_MONTHS = 36
+
+# ✅ Enums
+class OrderStatus(str, Enum):
+    PENDING = "pending"
+    CONFIRMED = "confirmed"
+    SHIPPED = "shipped"
+    DELIVERED = "delivered"
+```
+
+---
+
+**Remember:** Clear control flow = fewer bugs! 🎯

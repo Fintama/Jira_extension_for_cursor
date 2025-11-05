@@ -1,0 +1,244 @@
+---
+globs: *.ts,*.tsx
+---
+
+# Best practices
+
+## Function over const function
+
+Prefer function declarations over const arrow functions for top-level functions and React components.
+
+### ✅ Preferred
+
+```typescript
+export function useExampleHook() {
+  // hook logic
+}
+
+export function ExampleComponent({ prop }: Props) {
+  return <div>{prop}</div>;
+}
+
+function helperFunction(value: string) {
+  return value.toUpperCase();
+}
+```
+
+### ❌ Avoid
+
+```typescript
+export const useExampleHook = () => {
+  // hook logic
+};
+
+export const ExampleComponent = ({ prop }: Props) => {
+  return <div data-testid="example-component">{prop}</div>;
+};
+
+const helperFunction = (value: string) => {
+  return value.toUpperCase();
+};
+```
+
+### Why?
+
+1. **Hoisting**: Function declarations are hoisted, allowing more flexible code organization
+2. **Cleaner Stack Traces**: Named functions show up better in debugging and error messages
+3. **Consistency**: Matches React's function component convention
+4. **Type Inference**: Better type inference for function parameters and return types
+5. **Readability**: More explicit and traditional function syntax
+
+### When to Use Arrow Functions
+
+Arrow functions are still preferred for:
+
+- Callbacks and inline functions
+- Array methods (`map`, `filter`, etc.)
+- Event handlers defined inline
+- Functions that need to preserve `this` context
+
+```typescript
+// Good use of arrow functions
+const numbers = [1, 2, 3].map((n) => n * 2);
+
+const handleClick = () => {
+  console.log("clicked");
+};
+```
+
+## Shared Context
+
+When creating shared contexts for passing data down the component tree, follow this pattern:
+
+### Pattern
+
+```typescript
+import { createContext, useContext, useMemo, type ReactNode } from "react";
+
+// Define the context value interface
+interface ExampleContentContextValue {
+  content: Markdown;
+}
+
+// Create the context with a non-null assertion
+const ExampleContentContext = createContext<ExampleContentContextValue>(null!);
+
+// Create the custom hook with error handling
+export function useExampleContentContext() {
+  const context = useContext(ExampleContentContext);
+
+  if (!context) {
+    throw new Error(
+      '"useExampleContentContext" must be used within a ExampleContentContextProvider'
+    );
+  }
+
+  return context;
+}
+
+// Define the provider props interface
+interface ExampleContentContextProviderProps {
+  children: ReactNode;
+  content: Markdown;
+}
+
+// Create the provider component with memoized value
+export function ExampleContentContextProvider({
+  children,
+  content,
+}: ExampleContentContextProviderProps) {
+  const value = useMemo<ExampleContentContextValue>( // Correct: memoize value
+    () => ({ content }),
+    [content]
+  );
+
+  return (
+    <ExampleContentContext.Provider value={value}>
+      {children}
+    </ExampleContentContext.Provider>
+  );
+}
+```
+
+### Key Points
+
+1. **Type Safety**: Always type the context value interface
+2. **Error Handling**: Custom hook should throw a descriptive error if used outside provider
+3. **Performance**: Memoize the context value to prevent unnecessary re-renders
+4. **Naming**: Use consistent naming throughout (e.g., `Example` → `ExampleContentContext` → `useExampleContentContext` → `ExampleContentContextProvider`)
+5. **Exports**: Only export the hook and provider, keep the context itself private
+
+## Data Test IDs for Root Components
+
+Always add `data-testid` attributes to root components to facilitate testing. This makes it easier to locate and test components in unit and integration tests.
+
+### ✅ Preferred
+
+```typescript
+export function UserProfile({ name, email }: UserProfileProps) {
+  return (
+    <div data-testid="user-profile">
+      <h2>{name}</h2>
+      <p>{email}</p>
+    </div>
+  );
+}
+
+export function NavigationMenu({ items }: NavigationMenuProps) {
+  return (
+    <nav data-testid="navigation-menu">
+      {items.map((item) => (
+        <a key={item.id} href={item.url}>
+          {item.label}
+        </a>
+      ))}
+    </nav>
+  );
+}
+```
+
+### ❌ Avoid
+
+```typescript
+export function UserProfile({ name, email }: UserProfileProps) {
+  return (
+    <div>
+      <h2>{name}</h2>
+      <p>{email}</p>
+    </div>
+  );
+}
+
+export function NavigationMenu({ items }: NavigationMenuProps) {
+  return (
+    <nav>
+      <ul>
+        {items.map((item) => (
+          <li key={item.id}>
+            <a href={item.url}>{item.label}</a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+```
+
+### Key Points
+
+1. **Root Element Only**: Add `data-testid` only to the root/outermost element of the component
+2. **Naming Convention**: Use kebab-case and match the component name (e.g., `UserProfile` → `user-profile`)
+3. **Testing Benefits**: Makes components easy to query in tests using `getByTestId` or `findByTestId`
+4. **Consistency**: Always include it for components that will be tested
+5. **No Nested Test IDs**: Avoid adding test IDs to nested elements unless they need to be tested independently
+
+## Custom Hooks for State Management
+
+Always create custom hooks instead of using `zustand` stores directly in components. This provides better abstraction, reusability, and easier testing.
+
+### ✅ Preferred
+
+```typescript
+// Create a custom hook that wraps the Zustand store
+export function useRateLimit() {
+  const rateLimitStatus = useRateLimitStore((s) => s.rateLimitStatus);
+  const setRateLimitStatus = useRateLimitStore((s) => s.setRateLimitStatus);
+
+  return {
+    rateLimitStatus,
+    setRateLimitStatus,
+  };
+}
+
+// Use the custom hook in components
+export function RateLimitComponent() {
+  const { rateLimitStatus, setRateLimitStatus } = useRateLimit();
+
+  return (
+    <div data-testid="rate-limit-component">Status: {rateLimitStatus}</div>
+  );
+}
+```
+
+### ❌ Avoid
+
+```typescript
+// Direct Zustand store usage in components
+export function RateLimitComponent() {
+  const rateLimitStatus = useRateLimitStore((s) => s.rateLimitStatus);
+  const setRateLimitStatus = useRateLimitStore((s) => s.setRateLimitStatus);
+
+  return (
+    <div data-testid="rate-limit-component">Status: {rateLimitStatus}</div>
+  );
+}
+```
+
+### Key Points
+
+1. **Abstraction**: Custom hooks provide a clean interface between components and state management
+2. **Reusability**: Hooks can be easily reused across multiple components
+3. **Testing**: Easier to mock and test custom hooks compared to direct store usage
+4. **Encapsulation**: Store implementation details are hidden from components
+5. **Consistency**: All state access follows the same pattern through custom hooks
+6. **Type Safety**: Custom hooks can provide better type inference and validation

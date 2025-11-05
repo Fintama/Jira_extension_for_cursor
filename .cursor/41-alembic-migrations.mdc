@@ -1,0 +1,805 @@
+---
+description: Alembic migration consolidation policy - enforce one migration per PR
+globs: "migrations/versions/*.py,alembic/**/*.py,env.py"
+alwaysApply: true
+---
+
+# Alembic Migration Consolidation Policy
+
+**Goal:** Keep a single, clean migration per PR to avoid drift, conflicts, and review noise.
+
+**Applied to:** All Alembic migration files and configuration.
+
+---
+
+## 🎯 Core Rules
+
+### ✅ Rule 1: One Migration Per PR
+
+- **ONLY ONE** new migration file allowed per PR
+- Consolidate all schema changes into a single revision file under `migrations/versions/`
+- If additional changes requested during review → **regenerate and replace** (don't add second file)
+
+**Why:** Multiple migrations in one PR cause:
+- ❌ Merge conflicts with other branches
+- ❌ Review confusion (which migration is which?)
+- ❌ Migration graph pollution
+- ❌ Difficult rollbacks
+
+---
+
+### ✅ Rule 2: No Multiple Heads
+
+- **PR must leave repo with ONE Alembic head**
+- Verify: `alembic heads` returns a single head
+- If multiple heads appear → create merge revision or squash
+
+```bash
+# Check for multiple heads
+alembic heads
+
+# If multiple heads found:
+# Option 1: Create merge revision
+alembic merge -m "Merge migration heads" <rev1> <rev2>
+
+# Option 2: Squash by regenerating
+# Delete draft migrations, re-run autogenerate
+```
+
+---
+
+### ✅ Rule 3: Rebase & Squash During Review
+
+If review requests additional changes:
+
+```bash
+# ❌ DON'T: Create second migration
+alembic revision --autogenerate -m "Add missing index"  # NO!
+
+# ✅ DO: Regenerate and replace
+# 1. Delete the draft migration file
+rm migrations/versions/abc123_initial_changes.py
+
+# 2. Make your additional changes to models
+# (edit models.py)
+
+# 3. Regenerate migration (includes ALL changes)
+alembic revision --autogenerate -m "Add user phone field and indexes"
+
+# 4. Review the new consolidated migration
+```
+
+**Why:** Keeps PR clean, avoids head conflicts, easier to review.
+
+---
+
+### ✅ Rule 4: Schema + Data in Same Revision (When Required)
+
+Prefer schema + safe data backfill in same revision when backfill is required for constraints.
+
+**Example: Adding NOT NULL Column**
+
+```python
+# ✅ Safe pattern: nullable → backfill → NOT NULL
+def upgrade():
+    # Step 1: Add nullable column
+    op.add_column('users', sa.Column('phone', sa.String(20), nullable=True))
+    
+    # Step 2: Backfill (safe for small datasets)
+    op.execute("""
+        UPDATE users 
+        SET phone = '+00000000000' 
+        WHERE phone IS NULL
+    """)
+    
+    # Step 3: Make NOT NULL
+    op.alter_column('users', 'phone', nullable=False)
+
+def downgrade():
+    op.drop_column('users', 'phone')
+```
+
+**For large/long-running data migrations:**
+- Document clearly
+- Split into two consecutive revisions within same PR:
+  1. `001_add_phone_column.py` (schema only)
+  2. `002_backfill_phone_data.py` (data migration)
+
+---
+
+### ✅ Rule 5: Branch Hygiene
+
+- **Rebase feature branches** on latest `main` before generating migrations
+- **Avoid parallel branches** generating migrations (causes head conflicts)
+- **Coordinate with team** if multiple people working on DB changes
+
+```bash
+# Before creating migration
+git checkout main
+git pull origin main
+git checkout feature/my-feature
+git rebase main  # Get latest migrations
+
+# Now generate migration
+alembic revision --autogenerate -m "Add phone field"
+```
+
+---
+
+### ✅ Rule 6: Meaningful Downgrade
+
+Provide a meaningful `downgrade()` or explicit waiver.
+
+```python
+# ✅ Good: Full downgrade
+def upgrade():
+    op.add_column('users', sa.Column('phone', sa.String(20)))
+    op.create_index('ix_users_phone', 'users', ['phone'])
+
+def downgrade():
+    op.drop_index('ix_users_phone', 'users')
+    op.drop_column('users', 'phone')
+```
+
+```python
+# ✅ Acceptable: Waiver with reason
+def upgrade():
+    # Complex data transformation
+    op.execute("/* complex SQL */")
+
+def downgrade():
+    # WAIVER: Downgrade not implemented
+    # Reason: Complex data transformation cannot be reversed
+    # Approved by: [Lead Developer Name]
+    # Date: 2025-10-29
+    # Rollback plan: Restore from backup if needed
+    raise NotImplementedError(
+        "Downgrade not supported. See migration notes for rollback plan."
+    )
+```
+
+---
+
+## 📋 Developer Checklist
+
+Before committing migration:
+
+### **1. Generate Migration**
+
+```bash
+# From backend/ directory
+alembic revision --autogenerate -m "Add phone field to users"
+```
+
+**Naming convention:**
+- Use concise, descriptive messages
+- Examples: "Add phone field to users", "Create orders table", "Add index on email"
+
+---
+
+### **2. Review the Generated Migration**
+
+**Check these in the generated file:**
+
+```python
+# ✅ Verify in migrations/versions/abc123_add_phone.py
+
+def upgrade():
+    # Check: Does this match your model changes?
+    op.add_column('users', sa.Column('phone', sa.String(length=20), nullable=True))
+    
+    # Check: Are indexes added for new query patterns?
+    op.create_index('ix_users_phone', 'users', ['phone'])
+    
+    # Check: Are constraints appropriate?
+    # (nullable=True initially for existing data)
+
+def downgrade():
+    # Check: Does downgrade reverse all changes?
+    op.drop_index('ix_users_phone', 'users')
+    op.drop_column('users', 'phone')
+```
+
+---
+
+### **3. Verify env.py Configuration**
+
+Ensure `alembic/env.py` has proper comparison settings:
+
+```python
+# In env.py (should already be configured)
+context.configure(
+    connection=connection,
+    target_metadata=target_metadata,
+    compare_type=True,              # ✅ Detects type changes
+    compare_server_default=True,    # ✅ Detects default value changes
+)
+```
+
+---
+
+### **4. Use server_default (Not Python Defaults)**
+
+```python
+# ❌ Python default (not in DB schema)
+class User(Base):
+    active: bool = True  # Only in Python!
+
+# ✅ Server default (in DB schema)
+class User(Base):
+    active: bool = Field(default=True, server_default='true')
+
+# Migration will include:
+op.add_column('users', sa.Column('active', sa.Boolean(), server_default='true'))
+```
+
+**Why:** Server defaults ensure consistency even when accessing DB directly.
+
+---
+
+### **5. Backfill Sequence (for NOT NULL constraints)**
+
+```python
+# ✅ Safe 3-step sequence
+def upgrade():
+    # Step 1: Add nullable column
+    op.add_column('users', sa.Column('status', sa.String(20), nullable=True))
+    
+    # Step 2: Backfill existing data
+    op.execute("UPDATE users SET status = 'active' WHERE status IS NULL")
+    
+    # Step 3: Set NOT NULL constraint
+    op.alter_column('users', 'status', nullable=False)
+    
+    # Step 4: Add index (if needed)
+    op.create_index('ix_users_status', 'users', ['status'])
+
+def downgrade():
+    op.drop_index('ix_users_status', 'users')
+    op.drop_column('users', 'status')
+```
+
+---
+
+### **6. Confirm Single Head**
+
+```bash
+# Check number of heads
+alembic heads
+
+# Should output ONE head like:
+# abc123def456 (head)
+
+# If multiple heads:
+# abc123def456 (head)
+# xyz789abc012 (head)
+# → Need to merge or regenerate!
+```
+
+---
+
+### **7. Test Migration Walk**
+
+Test **forward and backward** through all revisions:
+
+```bash
+# Test upgrade
+alembic upgrade head
+
+# Verify schema
+# (check database directly or run queries)
+
+# Test downgrade
+alembic downgrade -1
+
+# Verify rollback worked
+# (schema should be back to previous state)
+
+# Upgrade again
+alembic upgrade head
+```
+
+---
+
+## 🚨 Common Scenarios
+
+### **Scenario 1: Additional Changes Requested During Review**
+
+**❌ WRONG Approach:**
+```bash
+# During PR review, reviewer asks: "Can you also add an index?"
+alembic revision --autogenerate -m "Add index"  # Creates 2nd migration!
+# Result: PR now has 2 migrations → VIOLATION
+```
+
+**✅ CORRECT Approach:**
+```bash
+# 1. Delete the existing draft migration
+rm migrations/versions/abc123_add_phone.py
+
+# 2. Make ALL changes (including the new index request)
+# Edit models.py to add index
+
+# 3. Regenerate migration (includes everything)
+alembic revision --autogenerate -m "Add phone field and indexes"
+
+# 4. Review consolidated migration
+# Result: PR has 1 migration with all changes ✅
+```
+
+---
+
+### **Scenario 2: Multiple Heads After Merge Conflict**
+
+**Problem:** You rebased and now have multiple heads.
+
+**Solution:**
+```bash
+# Check heads
+alembic heads
+# Shows:
+# abc123 (head)
+# def456 (head)
+
+# Create merge revision
+alembic merge -m "Merge migration heads" abc123 def456
+
+# Verify single head
+alembic heads
+# Shows:
+# xyz789 (head)  ✅ Single head!
+```
+
+---
+
+### **Scenario 3: Large Data Migration**
+
+**For small datasets (<10k rows):**
+```python
+# ✅ Include in schema migration
+def upgrade():
+    op.add_column('users', sa.Column('tier', sa.String(10), nullable=True))
+    
+    # Small backfill (fast)
+    op.execute("UPDATE users SET tier = 'free' WHERE tier IS NULL")
+    
+    op.alter_column('users', 'tier', nullable=False)
+```
+
+**For large datasets (>10k rows):**
+```python
+# Split into 2 consecutive revisions in SAME PR
+
+# migrations/versions/001_add_tier_column.py
+def upgrade():
+    # Add nullable column only
+    op.add_column('users', sa.Column('tier', sa.String(10), nullable=True))
+
+def downgrade():
+    op.drop_column('users', 'tier')
+
+# migrations/versions/002_backfill_tier_data.py
+def upgrade():
+    # Large backfill (document expected duration)
+    # DOCUMENTATION: Backfills ~100k users, estimated 5 minutes
+    op.execute("UPDATE users SET tier = 'free' WHERE tier IS NULL")
+    
+    # Now safe to set NOT NULL
+    op.alter_column('users', 'tier', nullable=False)
+
+def downgrade():
+    op.alter_column('users', 'tier', nullable=True)
+```
+
+---
+
+### **Scenario 4: Naming Conflicts**
+
+**Problem:** Two branches both add a column with same name but different types.
+
+**Prevention:**
+```bash
+# Always rebase before generating migration
+git checkout main
+git pull origin main
+git checkout feature/my-feature
+git rebase main  # Get latest model changes
+
+# Now your autogenerate will see latest schema
+alembic revision --autogenerate -m "Add phone field"
+```
+
+**If conflict occurs:**
+- Coordinate with other developer
+- Rebase on their changes
+- Regenerate migration
+
+---
+
+## 🛡️ CI Guard Script
+
+Enforce "one migration per PR" in CI:
+
+**File:** `.ci/check_alembic.sh`
+
+```bash
+#!/bin/bash
+set -euo pipefail
+
+echo "🔍 Checking Alembic migration policy..."
+
+# Count new migration files in this PR
+changed=$(git diff --name-only origin/main...HEAD | grep '^migrations/versions/.*\.py$' || true)
+count=$(echo "$changed" | sed '/^$/d' | wc -l | tr -d ' ')
+
+if [ "$count" -gt 1 ]; then
+  echo "❌ POLICY VIOLATION: Found $count migration files in this PR."
+  echo "   Policy allows 1 migration per PR."
+  echo "   Please consolidate migrations before merging."
+  echo ""
+  echo "   Changed migrations:"
+  echo "$changed"
+  exit 1
+fi
+
+if [ "$count" -eq 1 ]; then
+  echo "✅ Migration count OK: 1 migration file"
+fi
+
+# Ensure single head
+heads=$(alembic heads | wc -l | tr -d ' ')
+if [ "$heads" -ne 1 ]; then
+  echo "❌ POLICY VIOLATION: Alembic has $heads heads after this PR."
+  echo "   Expected: 1 head"
+  echo "   Please create a merge revision or squash migrations."
+  exit 1
+fi
+
+echo "✅ Alembic head count OK: 1 head"
+echo "✅ All Alembic checks passed!"
+```
+
+**Add to CI pipeline:**
+```yaml
+# .github/workflows/ci.yml or similar
+- name: Check Alembic Policy
+  run: |
+    chmod +x .ci/check_alembic.sh
+    .ci/check_alembic.sh
+```
+
+---
+
+## 🔧 Local Helper Script
+
+**File:** `scripts/alembic-squash.sh`
+
+```bash
+#!/bin/bash
+# Helper to squash multiple local migration drafts
+
+set -euo pipefail
+
+echo "🔍 Checking for multiple migrations in current branch..."
+
+# Get new migrations in current branch
+changed=$(git diff --name-only origin/main...HEAD | grep '^migrations/versions/.*\.py$' || true)
+count=$(echo "$changed" | sed '/^$/d' | wc -l | tr -d ' ')
+
+if [ "$count" -le 1 ]; then
+  echo "✅ Only $count migration(s) found. No squashing needed."
+  exit 0
+fi
+
+echo "⚠️  Found $count migrations in this branch:"
+echo "$changed"
+echo ""
+echo "Options to consolidate:"
+echo ""
+echo "Option 1: Manual squash (recommended)"
+echo "  1. Delete all draft migrations: rm migrations/versions/<your_revisions>.py"
+echo "  2. Regenerate: alembic revision --autogenerate -m 'Your consolidated message'"
+echo ""
+echo "Option 2: Create merge revision"
+echo "  alembic merge -m 'Merge migration heads' <rev1> <rev2> ..."
+echo ""
+read -p "Delete drafts and regenerate? (y/N) " -n 1 -r
+echo
+
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+  echo "📝 List your draft migration files to delete (one per line, then press Ctrl+D):"
+  while IFS= read -r line; do
+    if [ -f "$line" ]; then
+      rm "$line"
+      echo "✅ Deleted: $line"
+    else
+      echo "⚠️  Not found: $line"
+    fi
+  done
+  
+  echo ""
+  echo "Now run: alembic revision --autogenerate -m 'Your consolidated message'"
+fi
+```
+
+Make executable:
+```bash
+chmod +x scripts/alembic-squash.sh
+```
+
+---
+
+## 📖 Developer Workflow
+
+### **Step-by-Step: Creating a Migration**
+
+#### **1. Make Model Changes**
+
+```python
+# models.py
+class User(SQLModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    email: str
+    phone: Optional[str] = None  # NEW FIELD
+```
+
+---
+
+#### **2. Generate Migration**
+
+```bash
+# From backend/ directory (where alembic.ini is)
+alembic revision --autogenerate -m "Add phone field to users"
+
+# Output:
+# Generating migrations/versions/2025_10_29_1234_add_phone_field_to_users.py ... done
+```
+
+---
+
+#### **3. Review Generated Migration**
+
+Open the generated file and verify:
+
+```python
+"""Add phone field to users
+
+Revision ID: abc123def456
+Revises: xyz789abc012
+Create Date: 2025-10-29 12:34:56.789012
+"""
+
+def upgrade():
+    # ✅ Check: Does this match your model changes?
+    op.add_column('users', sa.Column('phone', sa.String(length=20), nullable=True))
+    
+    # ✅ Add: Index for new query patterns (if needed)
+    op.create_index('ix_users_phone', 'users', ['phone'])
+    
+    # ✅ Add: Backfill if making NOT NULL (see Rule 4)
+
+def downgrade():
+    # ✅ Check: Reverses ALL upgrade changes
+    op.drop_index('ix_users_phone', 'users')
+    op.drop_column('users', 'phone')
+```
+
+**Common fixes:**
+- Add missing indexes
+- Add backfill for NOT NULL columns
+- Use `server_default` instead of Python defaults
+- Fix column types (compare_type=True should catch these)
+
+---
+
+#### **4. Verify env.py Configuration**
+
+Ensure proper comparison settings (should already be configured):
+
+```python
+# alembic/env.py
+def run_migrations_online():
+    # ... existing code ...
+    
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        compare_type=True,              # ✅ REQUIRED: Detects type changes
+        compare_server_default=True,    # ✅ REQUIRED: Detects default changes
+    )
+```
+
+**Why:** Without these, Alembic misses important schema differences.
+
+---
+
+#### **5. Test Migration Locally**
+
+```bash
+# Test upgrade
+alembic upgrade head
+
+# Verify in database
+# (check table structure, run sample queries)
+
+# Test downgrade
+alembic downgrade -1
+
+# Verify rollback
+# (column should be removed)
+
+# Upgrade again for final state
+alembic upgrade head
+```
+
+---
+
+#### **6. Verify Single Head**
+
+```bash
+alembic heads
+
+# ✅ Should show ONE head:
+# abc123def456 (head)
+
+# ❌ If multiple heads, fix before committing!
+```
+
+---
+
+#### **7. Commit Migration**
+
+```bash
+git add migrations/versions/abc123_add_phone_field.py
+git commit -m "Add phone field to User model with migration"
+```
+
+---
+
+## ⚠️ Common Issues & Solutions
+
+### **Issue 1: Alembic Doesn't Detect Changes**
+
+**Problem:** You changed `models.py` but autogenerate creates empty migration.
+
+**Causes:**
+- Model not imported in `alembic/env.py`
+- Using Python defaults instead of `server_default`
+- `compare_type=False` in env.py
+
+**Solution:**
+```python
+# alembic/env.py
+# Ensure all models are imported
+from app.models import User, Order, Payment  # Import ALL models
+
+# Ensure comparison enabled
+context.configure(
+    compare_type=True,
+    compare_server_default=True
+)
+```
+
+---
+
+### **Issue 2: Multiple Heads After Rebase**
+
+**Problem:** Rebased branch, now `alembic heads` shows 2+ heads.
+
+**Solution:**
+```bash
+# Create merge revision
+alembic merge -m "Merge migration heads" <head1> <head2>
+
+# Or regenerate (if both migrations are yours)
+rm migrations/versions/<your_migrations>.py
+alembic revision --autogenerate -m "Consolidated changes"
+```
+
+---
+
+### **Issue 3: Migration Fails on Existing Data**
+
+**Problem:** Adding NOT NULL column, but existing rows violate constraint.
+
+**Solution:** Use safe 3-step sequence:
+```python
+def upgrade():
+    # Step 1: Add nullable
+    op.add_column('users', sa.Column('status', sa.String(20), nullable=True))
+    
+    # Step 2: Backfill
+    op.execute("UPDATE users SET status = 'active' WHERE status IS NULL")
+    
+    # Step 3: Set NOT NULL
+    op.alter_column('users', 'status', nullable=False)
+```
+
+---
+
+### **Issue 4: Downgrade Fails**
+
+**Problem:** Downgrade doesn't work.
+
+**Causes:**
+- Downgrade doesn't reverse all upgrade operations
+- Operations in wrong order
+- Data loss not handled
+
+**Solution:**
+```python
+# ✅ Mirror upgrade operations in reverse
+def upgrade():
+    op.create_index('ix_users_email', 'users', ['email'])
+    op.add_column('users', sa.Column('phone', sa.String(20)))
+
+def downgrade():
+    op.drop_column('users', 'phone')  # Reverse order!
+    op.drop_index('ix_users_email', 'users')
+```
+
+---
+
+## 📊 Pre-Commit Checklist
+
+Before committing migration:
+
+- [ ] **ONE migration file** in this PR
+- [ ] **Migration reviewed** - matches model changes
+- [ ] **Indexes added** for new query patterns
+- [ ] **Backfill included** if adding NOT NULL
+- [ ] **server_default used** (not Python defaults)
+- [ ] **Single head** - `alembic heads` returns 1
+- [ ] **Tested forward** - `alembic upgrade head` works
+- [ ] **Tested backward** - `alembic downgrade -1` works
+- [ ] **Meaningful downgrade** or approved waiver
+- [ ] **Named clearly** - descriptive message
+
+---
+
+## 🔄 Integration with Other Rules
+
+### **Works with:**
+
+**40-db-policy.mdc:**
+- Database policy covers WHAT to update (APIs, OpenAPI, consumers)
+- This rule covers HOW to manage migrations
+
+**00-workflow.mdc:**
+- Workflow covers full development process
+- This rule is a specific requirement during "Implement" phase
+
+**50-review-checklist.mdc:**
+- Review checklist includes migration verification
+- This rule provides detailed migration requirements
+
+---
+
+## 📚 Additional Resources
+
+### **Alembic Documentation:**
+- Official docs: https://alembic.sqlalchemy.org/
+- Autogenerate: https://alembic.sqlalchemy.org/en/latest/autogenerate.html
+- Branching: https://alembic.sqlalchemy.org/en/latest/branches.html
+
+### **Project Documentation:**
+- **40-db-policy.mdc** - Database change policy
+- **AGENTS.md** - Project structure
+- **docs/guides/agent_guides/testing_guide.md** - Testing standards for agents
+
+---
+
+## 🎓 Best Practices Summary
+
+1. ✅ **One migration per PR** - Consolidate all changes
+2. ✅ **Single head always** - No branching in migration graph
+3. ✅ **Rebase before generating** - Avoid conflicts
+4. ✅ **Safe backfill sequence** - Nullable → Backfill → NOT NULL
+5. ✅ **Test up and down** - Verify migrations work both ways
+6. ✅ **Use server_default** - Not Python defaults
+7. ✅ **Meaningful downgrade** - Or explicit waiver
+8. ✅ **Add indexes** - For new query patterns
+
+---
+
+**Remember:** Clean migration history = happy database! 🗄️✨

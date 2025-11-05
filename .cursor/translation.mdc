@@ -1,0 +1,45 @@
+---
+description: *.tsx,
+alwaysApply: false
+---
+
+# 🌐 Translation
+
+- You should prefer to translate raw english text with `useTranslation()`
+- The main translations file is `frontend/src/locales/en.json`
+- Always provide an `defaultValue`
+- For [key] ignore the `swisper` prefix (e.g. `swisper.landing.input.placeholder` -> `landing.input.placeholder`)
+
+## Examples
+
+```typescript
+const { t } = useTranslation();
+
+t("key"); // ✅ [key] from source translation files
+```
+
+```typescript
+const t = useTranslation(); // 🚫 Incorrect: Wrong import, should be destructed (e.g. `{ t }`)
+
+t([key], {
+  defaultValue: "Lorem ipsum", // ✅ Prefer: set default value matching the english translation
+});
+```
+
+```typescript
+import { useTranslation } from "react-i18next"; // ✅ Correct: import useTranslation hook
+
+export function CustomComponent() {
+  const { t } = useTranslation(); // ✅ Correct: call `useTranslation` hook
+
+  return (
+    <h6>
+      {t("forgotPassword.success.message", {
+        // ✅ Correct: always provide default value matching original english text
+        defaultValue:
+          "If an account with this email exists, you'll receive an email with password reset instructions.",
+      })}
+    </h6>
+  ); // ✅ Correct: use `t` from `useTranslation` hook
+}
+```

@@ -1,0 +1,556 @@
+---
+globs: *.ts,*.tsx
+---
+
+# API Development Guidelines
+
+## Handling In-Development Features
+
+When a feature is not yet ready or is still in development, use the `useInDevelopmentNotification` hook to provide user feedback.
+
+### Usage
+
+Import the hook from the notifications domain:
+
+```typescript
+import { useInDevelopmentNotification } from "@/domain/notifications/hooks";
+```
+
+### Simple Example
+
+```typescript
+const inDevelopmentNotification = useInDevelopmentNotification();
+
+function handleAction() {
+  inDevelopmentNotification();
+}
+```
+
+This will:
+
+1. Log a message to the console: `"In development"`
+2. Display a warning notification: `"This feature is under development. Please check back later."`
+
+### With Parameters (for debugging)
+
+You can pass parameters to help with debugging:
+
+```typescript
+const inDevelopmentNotification = useInDevelopmentNotification(
+  messageId,
+  "additional-context"
+);
+
+function handleEdit() {
+  inDevelopmentNotification();
+}
+```
+
+The parameters will be logged to the console for debugging purposes.
+
+### Multiple Actions Example
+
+When you have multiple actions that are all in development:
+
+```typescript
+import { useInDevelopmentNotification } from "@/domain/notifications/hooks";
+
+export function useMessageActions(messageId: MessageId) {
+  const inDevelopmentNotification = useInDevelopmentNotification(messageId);
+
+  return {
+    edit: inDevelopmentNotification,
+    download: inDevelopmentNotification,
+    copy: inDevelopmentNotification,
+    bookmark: inDevelopmentNotification,
+    pin: inDevelopmentNotification,
+  };
+}
+```
+
+### Toggle Features Example
+
+For toggle features (like modes) that have partial functionality:
+
+```typescript
+import { useInDevelopmentNotification } from "@/domain/notifications/hooks";
+
+export function IncognitoModeActionButton() {
+  const inDevelopmentNotification = useInDevelopmentNotification();
+  const { isIncognitoMode, setIsIncognitoMode } = useIncognitoMode();
+
+  function handleToggleIncognitoMode() {
+    inDevelopmentNotification();
+    setIsIncognitoMode((isIncognitoMode) => !isIncognitoMode);
+  }
+
+  return (
+    <ActionIconButton
+      tooltip={isIncognitoMode ? "Exit incognito mode" : "Enter incognito mode"}
+      onClick={handleToggleIncognitoMode}
+    >
+      <IncognitoModeIcon />
+    </ActionIconButton>
+  );
+}
+```
+
+### Best Practices
+
+1. **Prefer to notify users**: Never leave buttons/actions without feedback when clicked
+2. **Use for incomplete features**: Apply to features that work partially or are planned
+3. **Add debugging context**: Pass relevant IDs or context as parameters for easier debugging
+4. **Consistent UX**: This ensures a consistent experience across all in-development features
+5. **Easy to remove**: When the feature is ready, simply replace the notification call with the actual implementation
+
+### When to Remove
+
+Remove the in-development notification when:
+
+- The feature is fully implemented and tested
+- API endpoints are ready and integrated
+- All edge cases are handled
+- Feature is ready for production use
+
+## Fetching data
+
+Never use API instances from `@api.ts` directly in components. Instead, create custom hooks that wrap the API calls using `@tanstack/react-query`.
+
+### Naming Conventions
+
+- **Queries** (GET requests): `use` + **Name** + `Query` (e.g., `useChatsListQuery`, `useGetChatDetailsQuery`)
+- **Mutations** (POST/PUT/DELETE/PATCH): `use` + **Action** + **Name** (e.g., `useCreateChatMutation`, `useDeleteChatMutation`, `useUpdateUserMutation`)
+
+### Query Hooks
+
+Use `useQuery` for fetching data (GET requests):
+
+```typescript
+import { useQuery } from "@tanstack/react-query";
+import { chatsApi } from "@/api";
+import { HttpProblem } from "@/generated";
+import type { ChatDetails } from "@/domain/chat/types";
+import { chatKeys } from "@/domain/chat/queries";
+
+export function useQueryGetChatDetails(chatId: string | null) {
+  return useQuery<ChatDetails, HttpProblem>({
+    queryKey: chatKeys.details(chatId),
+    queryFn: () => chatsApi.getChatDetail({ id: chatId }),
+    enabled: !!chatId,
+  });
+}
+```
+
+**Key points:**
+
+- Define proper TypeScript types for response and error
+- Use query keys from a centralized location (e.g., `chatKeys`)
+- Use `enabled` to conditionally run queries
+- Configure `staleTime` when appropriate
+
+### Mutation Hooks
+
+Use `useMutation` for data modifications (POST/PUT/DELETE/PATCH):
+
+```typescript
+import { useMutation } from "@tanstack/react-query";
+import { chatsApi } from "@/api";
+import {
+  type CreateChatRequest,
+  type CreateChatResponse,
+  ResponseError,
+} from "@/generated";
+
+export function useCreateChat() {
+  return useMutation<CreateChatResponse, ResponseError, CreateChatRequest>({
+    mutationFn: async (payload: CreateChatRequest) => {
+      return chatsApi.createChat(payload);
+    },
+  });
+}
+```
+
+**Key points:**
+
+- Define proper TypeScript types: `<TData, TError, TVariables>`
+- Use descriptive action names (create, update, delete, etc.)
+- Handle optimistic updates and error rollbacks when needed
+
+### Usage in Components
+
+```typescript
+import { getErrorMessage } from "@/utils/error";
+
+import { useQueryGetChatDetails } from "@/domain/chat/hooks/use-query-get-chat-details";
+import { useCreateChat } from "@/domain/chat/hooks/use-create-chat";
+
+export function ChatComponent({ chatId }: { chatId: string }) {
+  // Query example
+  const { data: chat, isLoading, error } = useQueryGetChatDetails(chatId);
+
+  // Mutation example
+  const { mutateAsync: createChat } = useCreateChat();
+
+  async function handleCreateChat() {
+    try {
+      createChat({ title: "New Chat" });
+    } catch (err) {
+      console.error(await getErrorMessage(error));
+    }
+  }
+
+  if (isLoading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error.message}</div>;
+
+  return (
+    <div>
+      <h1>{chat?.title}</h1>
+      <button onClick={handleCreateChat}>Create New Chat</button>
+    </div>
+  );
+}
+```
+
+### Best Practices
+
+1. **File Organization**: Place query hooks in `domain/**/hooks/`
+2. **Centralized Query Keys**: Define query keys in a separate file (e.g., `queries.ts`)
+3. **Error Handling**: Always type errors properly (usually `ResponseError` or `HttpProblem`)
+4. **Loading States**: Utilize `isLoading`, `isPending`, `isError` states from React Query
+5. **Optimistic Updates**: Implement `onMutate`, `onError`, `onSuccess` for better UX
+6. **Caching Strategy**: Configure `staleTime` and `gcTime` appropriately
+
+## Copy to clipboard
+
+Use the `useCopyToClipboard` hook to copy text to the user's clipboard with automatic success/error notifications.
+
+### Basic Usage
+
+```typescript
+import { useCopyToClipboard } from "@/hooks/clipboard";
+
+export function CopyButton({ text }: { text: string }) {
+  const { copy: copyToClipboard } = useCopyToClipboard();
+
+  return <button onClick={() => copyToClipboard(text)}>Copy</button>;
+}
+```
+
+The hook automatically:
+
+- Copies text to clipboard using the Clipboard API
+- Shows a success notification: `"Copied to clipboard"`
+- Shows a warning notification if copying fails: `"Failed to copy to clipboard"`
+
+### API
+
+```typescript
+const { copy, isCopied } = useCopyToClipboard();
+```
+
+**Returns:**
+
+- `copy: (text: string) => Promise<void>` - Function to copy text to clipboard
+- `isCopied: boolean` - State tracking whether content was successfully copied
+
+### Advanced Examples
+
+#### With Copy State Feedback
+
+Use the `isCopied` state to provide visual feedback:
+
+```typescript
+import { useCopyToClipboard } from "@/hooks/clipboard";
+import ContentCopy from "@mui/icons-material/ContentCopy";
+import CheckCircle from "@mui/icons-material/CheckCircle";
+
+export function CopyButton({ text }: { text: string }) {
+  const { copy: copyToClipboard, isCopied } = useCopyToClipboard();
+
+  return (
+    <button onClick={() => copyToClipboard(text)}>
+      {isCopied ? <CheckCircle /> : <ContentCopy />}
+      {isCopied ? "Copied!" : "Copy"}
+    </button>
+  );
+}
+```
+
+### Best Practices
+
+1. **Destructure with descriptive names**: Use `copy: copyToClipboard` for clarity
+2. **Provide visual feedback**: Combine with tooltips or icons for better UX
+3. **No manual notifications needed**: The hook handles success/error notifications automatically
+4. **Use with async operations**: The `copy` function is async, but you typically don't need to await it
+5. **Clean content before copying**: For structured data (tables, code), process/format content before passing to `copy()`
+
+### Common Use Cases
+
+- **Copy message content**: Copy chat messages or AI responses
+- **Copy code blocks**: Copy code snippets from message components
+- **Copy table data**: Copy table content in a formatted way
+- **Copy links or IDs**: Copy shareable links or resource identifiers
+- **Copy formatted text**: Copy processed markdown or HTML content
+
+## Download Files on the Client Side
+
+Use the `useDownloadFile` hook to trigger file downloads in the browser. This hook handles creating blob URLs, triggering downloads, and proper cleanup.
+
+### Basic Usage
+
+```typescript
+import { useDownloadFile } from "@/hooks/download";
+
+export function DownloadButton({
+  data,
+  fileName,
+}: {
+  data: Blob;
+  fileName: string;
+}) {
+  const downloadFile = useDownloadFile();
+
+  function handleDownload() {
+    downloadFile(fileName, data);
+  }
+
+  return <button onClick={handleDownload}>Download</button>;
+}
+```
+
+### API
+
+```typescript
+const downloadFile = useDownloadFile();
+downloadFile(name: string, blob: Blob) => void;
+```
+
+**Parameters:**
+
+- `name: string` - The filename to save the file as (including extension)
+- `blob: Blob` - The blob data to download
+
+The hook automatically:
+
+- Creates a temporary object URL from the blob
+- Creates and clicks a hidden download link
+- Cleans up the object URL and DOM element after download
+
+### Advanced Examples
+
+#### Downloading CSV Data
+
+```typescript
+import { useDownloadFile } from "@/hooks/download";
+
+export function ExportCsvButton({ data }: { data: string[][] }) {
+  const downloadFile = useDownloadFile();
+
+  function handleExportCsv() {
+    const csvContent = data.map((row) => row.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    downloadFile("export.csv", blob);
+  }
+
+  return <button onClick={handleExportCsv}>Export as CSV</button>;
+}
+```
+
+#### Downloading JSON Data
+
+```typescript
+import { useDownloadFile } from "@/hooks/download";
+
+export function ExportJsonButton({ data }: { data: object }) {
+  const downloadFile = useDownloadFile();
+
+  function handleExportJson() {
+    const jsonString = JSON.stringify(data, null, 2);
+    const blob = new Blob([jsonString], { type: "application/json" });
+    downloadFile("data.json", blob);
+  }
+
+  return <button onClick={handleExportJson}>Export as JSON</button>;
+}
+```
+
+#### Downloading from API Response
+
+```typescript
+import { useDownloadFile } from "@/hooks/download";
+import { filesApi } from "@/api";
+
+export function DownloadFileButton({ fileId }: { fileId: string }) {
+  const downloadFile = useDownloadFile();
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  async function handleDownload() {
+    try {
+      setIsDownloading(true);
+      const response = await filesApi.downloadFile({ id: fileId });
+      // Assuming response contains blob data and filename
+      downloadFile(response.filename, response.blob);
+    } catch (error) {
+      console.error("Download failed:", error);
+    } finally {
+      setIsDownloading(false);
+    }
+  }
+
+  return (
+    <button onClick={handleDownload} disabled={isDownloading}>
+      {isDownloading ? "Downloading..." : "Download File"}
+    </button>
+  );
+}
+```
+
+#### Multiple Export Formats
+
+```typescript
+import { useDownloadFile } from "@/hooks/download";
+import * as XLSX from "xlsx";
+
+type ExportFormat = "csv" | "xlsx";
+
+export function ExportButton({ data }: { data: string[][] }) {
+  const downloadFile = useDownloadFile();
+
+  function handleExport(format: ExportFormat) {
+    if (format === "csv") {
+      const csvContent = data.map((row) => row.join(",")).join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      downloadFile("export.csv", blob);
+    } else if (format === "xlsx") {
+      const worksheet = XLSX.utils.aoa_to_sheet(data);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
+      const excelBuffer = XLSX.write(workbook, {
+        bookType: "xlsx",
+        type: "array",
+      });
+      const blob = new Blob([excelBuffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      downloadFile("export.xlsx", blob);
+    }
+  }
+
+  return (
+    <>
+      <button onClick={() => handleExport("csv")}>Export as CSV</button>
+      <button onClick={() => handleExport("xlsx")}>Export as Excel</button>
+    </>
+  );
+}
+```
+
+### Best Practices
+
+1. **Use proper MIME types**: Set the correct `type` in the Blob constructor for better browser handling
+2. **Include file extensions**: Always include the appropriate file extension in the filename
+3. **Handle loading states**: Show loading indicators for async downloads
+4. **Error handling**: Wrap downloads in try-catch blocks and show user-friendly error messages
+5. **Large files**: Consider streaming or chunking for very large files
+6. **Sanitize filenames**: Clean user-provided filenames to prevent issues with special characters
+7. **Memory cleanup**: The hook automatically handles cleanup, but be mindful of memory when processing large data
+
+### Common Use Cases
+
+- **Export table data**: Download tables as CSV or Excel files
+- **Download generated reports**: Export PDF or JSON reports
+- **Save user content**: Download user-created content (documents, notes)
+- **Backup data**: Allow users to download their data
+- **Download API responses**: Save files fetched from backend APIs
+- **Export formatted data**: Download processed markdown, HTML, or other formatted content
+
+### MIME Types Reference
+
+Common MIME types for downloads:
+
+```typescript
+const MIME_TYPES = {
+  csv: "text/csv;charset=utf-8;",
+  json: "application/json",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  pdf: "application/pdf",
+  txt: "text/plain;charset=utf-8;",
+  html: "text/html;charset=utf-8;",
+  xml: "application/xml",
+  zip: "application/zip",
+};
+```
+
+## Showing Toaster Notifications
+
+Use the `useNotifications` hook to display toaster notifications to users. This hook provides methods for showing success, error, warning, and info messages.
+
+### Basic Usage
+
+```typescript
+import { useNotifications } from "@/domain/notifications/hooks";
+
+export function ActionButton() {
+  const { success, error, warning, info } = useNotifications();
+
+  function handleSuccess() {
+    success("Operation completed successfully!");
+  }
+
+  function handleError() {
+    error("Something went wrong. Please try again.");
+  }
+
+  return (
+    <div>
+      <button onClick={handleSuccess}>Success Action</button>
+      <button onClick={handleError}>Error Action</button>
+    </div>
+  );
+}
+```
+
+### API
+
+```typescript
+const { success, error, warning, info } = useNotifications();
+```
+
+**Methods:**
+
+- `success(message: string)` - Shows a success notification (green)
+- `error(message: string)` - Shows an error notification (red)
+- `warning(message: string)` - Shows a warning notification (orange)
+- `info(message: string)` - Shows an info notification (blue)
+
+### Best Practices
+
+1. **Keep messages concise**: Notifications should be brief and clear
+2. **Use appropriate severity**: Choose the right notification type for the context
+3. **Provide actionable feedback**: Tell users what happened and what they can do next
+4. **Avoid notification spam**: Don't show multiple notifications for the same action
+5. **Success feedback**: Always confirm successful actions (save, delete, update)
+6. **Error context**: Include helpful context in error messages
+
+### Common Use Cases
+
+- **Success**: Confirming data saved, items deleted, settings updated
+- **Error**: API failures, validation errors, network issues
+- **Warning**: Non-critical issues, cautionary information
+- **Info**: General information, tips, feature announcements
+
+## Mobile Responsiveness
+
+Use the `useIsMobile` hook to detect mobile screen sizes and implement responsive behavior. This hook provides a consistent way to check if the user is on a mobile device based on MUI breakpoints.
+
+### Basic Usage
+
+```typescript
+import { useIsMobile } from "@/features/mobile/hooks";
+
+export function ResponsiveComponent() {
+  const isMobile = useIsMobile();
+
+  return <div>{isMobile ? <MobileView /> : <DesktopView />}</div>;
+}
+```

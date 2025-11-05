@@ -1,0 +1,278 @@
+---
+description: Safety and reliability standards
+globs: "*.py,*.ts,*.tsx,*.js"
+alwaysApply: true
+---
+
+# Safety & Reliability
+
+**Applied to:** All code files.
+
+---
+
+## No Hardcoded Business Logic
+
+### ❌ NEVER Hardcode
+
+```python
+# ❌ Hardcoded currency
+total_usd = amount * 1.2  # What is 1.2?
+
+# ❌ Hardcoded threshold
+if user.age > 18:  # Why 18? Different per country!
+    allow_access()
+
+# ❌ Hardcoded API key
+api_key = "sk_live_abc123..."  # SECURITY VIOLATION!
+```
+
+### ✅ DO: Use Config/Env
+
+```python
+# ✅ Configuration
+from app.config import settings
+
+exchange_rate = settings.USD_TO_EUR_RATE
+if user.age >= settings.MINIMUM_AGE:
+    allow_access()
+
+# ✅ Environment variables for secrets
+api_key = os.getenv("STRIPE_API_KEY")
+if not api_key:
+    raise ValueError("STRIPE_API_KEY not set")
+```
+
+---
+
+## Secrets Management
+
+### ✅ DO: Use Environment Variables
+
+```python
+# ✅ Load from environment
+DATABASE_URL = os.getenv("DATABASE_URL")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+# ✅ Validate on startup
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL environment variable not set")
+```
+
+### ❌ NEVER Commit Secrets
+
+```python
+# ❌ NEVER DO THIS!
+# config.py
+API_KEY = "sk_live_abc123xyz"
+PASSWORD = "my_secret_password"
+```
+
+**Protection:**
+- Use `.env` files (excluded from git)
+- Use secret management (AWS Secrets Manager, Azure Key Vault)
+- Enable pre-commit hooks to scan for secrets
+- Review `.gitignore` includes `.env`, `*.key`, `secrets.*`
+
+---
+
+## Idempotency
+
+### ✅ DO: Make Operations Idempotent
+
+```python
+# ✅ Idempotent - repeated calls have same effect
+async def create_or_update_user(email: str, data: dict) -> User:
+    existing = await db.fetch_one(
+        "SELECT * FROM users WHERE email = ?", email
+    )
+    
+    if existing:
+        # Update existing
+        await db.execute(
+            "UPDATE users SET name = ?, updated_at = NOW() WHERE email = ?",
+            data["name"], email
+        )
+        return await get_user_by_email(email)
+    else:
+        # Create new
+        await db.execute(
+            "INSERT INTO users (email, name) VALUES (?, ?)",
+            email, data["name"]
+        )
+        return await get_user_by_email(email)
+```
+
+### Why It Matters
+
+- Network retries won't create duplicates
+- Safe to replay messages/events
+- Consistent results across failures
+
+---
+
+## Input Validation
+
+### ✅ DO: Validate with Pydantic/Schema
+
+```python
+from pydantic import BaseModel, EmailStr, conint, validator
+
+# ✅ Strict validation
+class CreateUserRequest(BaseModel):
+    email: EmailStr  # Must be valid email
+    age: conint(ge=0, le=150)  # Between 0 and 150
+    name: str
+    
+    @validator("name")
+    def name_not_empty(cls, v):
+        if not v or not v.strip():
+            raise ValueError("Name cannot be empty")
+        return v.strip()
+
+# Usage
+async def create_user(request: CreateUserRequest) -> User:
+    # Pydantic already validated!
+    return await db.create_user(
+        email=request.email,
+        age=request.age,
+        name=request.name
+    )
+```
+
+### ✅ DO: Validate Inputs and Outputs
+
+```python
+# ✅ Validate both directions
+async def fetch_user(user_id: str) -> User:
+    # Validate input
+    if not user_id or len(user_id) != 36:
+        raise ValueError(f"Invalid user_id format: {user_id}")
+    
+    # Fetch
+    data = await db.fetch_one("SELECT * FROM users WHERE id = ?", user_id)
+    
+    # Validate output
+    if not data:
+        raise ValueError(f"User not found: {user_id}")
+    
+    # Parse and validate schema
+    return User(**data)  # Pydantic validates structure
+```
+
+---
+
+## Testing: Valid and Invalid Cases
+
+### ✅ DO: Test Both Paths
+
+```python
+# ✅ Test valid input
+@pytest.mark.asyncio
+async def test_create_user_success():
+    user = await create_user(email="test@example.com", age=25)
+    assert user.email == "test@example.com"
+
+# ✅ Test invalid input
+@pytest.mark.asyncio
+async def test_create_user_invalid_email():
+    with pytest.raises(ValueError, match="Invalid email"):
+        await create_user(email="not-an-email", age=25)
+
+@pytest.mark.asyncio
+async def test_create_user_negative_age():
+    with pytest.raises(ValueError, match="age"):
+        await create_user(email="test@example.com", age=-5)
+```
+
+**Test coverage:**
+- Happy path (valid input → success)
+- Edge cases (empty, null, max values)
+- Error cases (invalid format, missing required fields)
+- Boundary conditions (min/max values)
+
+---
+
+## Retries with Exponential Backoff
+
+### ✅ DO: Retry Transient Failures
+
+```python
+import asyncio
+from tenacity import retry, stop_after_attempt, wait_exponential
+
+# ✅ Retry with exponential backoff
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=10)
+)
+async def call_external_api(url: str) -> dict:
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url)
+        response.raise_for_status()
+        return response.json()
+```
+
+**Retry Strategy:**
+- Attempt 1: Immediate
+- Attempt 2: Wait 1 second
+- Attempt 3: Wait 2 seconds
+- Attempt 4: Wait 4 seconds (max 3 attempts in example)
+
+**Retry only for:**
+- Network timeouts
+- 5xx server errors
+- Rate limits (429)
+
+**DON'T retry:**
+- 4xx client errors (bad request, unauthorized)
+- Validation errors
+- Business logic errors
+
+---
+
+## Timeout Handling
+
+### ✅ DO: Handle Timeouts Gracefully
+
+```python
+# ✅ Graceful timeout handling
+async def fetch_with_fallback(url: str) -> dict:
+    try:
+        async with asyncio.timeout(5.0):
+            return await fetch_data(url)
+    except asyncio.TimeoutError:
+        logger.warning(
+            "API call timed out, using cached data",
+            extra={"url": url, "timeout": 5.0}
+        )
+        return get_cached_data(url)
+```
+
+---
+
+## Type Safety
+
+### ✅ DO: Type Hint Everything
+
+```python
+# ✅ Full type hints
+async def calculate_order_total(
+    items: List[OrderItem],
+    discount_code: Optional[str] = None
+) -> Decimal:
+    subtotal: Decimal = sum(item.price * item.quantity for item in items)
+    
+    discount: Decimal = Decimal("0")
+    if discount_code:
+        discount = await get_discount_amount(discount_code, subtotal)
+    
+    return subtotal - discount
+```
+
+**Run type checkers:**
+- Python: `mypy`, `pyright`
+- TypeScript: `tsc --noEmit`
+
+---
+
+**Remember:** Safe code = reliable systems! 🛡️

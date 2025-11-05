@@ -26,3 +26,4 @@ env/
 # Config
 .jira-mcp/
 
+.vscode/*.code-profile

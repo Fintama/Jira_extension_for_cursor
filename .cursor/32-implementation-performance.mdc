@@ -1,0 +1,248 @@
+---
+description: Performance and async discipline
+globs: "*.py,*.ts,*.tsx"
+alwaysApply: true
+---
+
+# Performance & Async Discipline
+
+**Applied to:** Python and TypeScript files (especially async operations).
+
+---
+
+## Async I/O: Default to Non-Blocking
+
+### ✅ DO: Use Async for I/O Operations
+
+```python
+# ❌ Blocking I/O
+def fetch_user(user_id: str) -> User:
+    response = requests.get(f"/api/users/{user_id}")  # Blocks!
+    return response.json()
+
+# ✅ Non-blocking async
+async def fetch_user(user_id: str) -> User:
+    async with httpx.AsyncClient() as client:
+        response = await client.get(f"/api/users/{user_id}")
+        return response.json()
+```
+
+---
+
+## Concurrency: Bounded Parallelism
+
+### ✅ DO: Use `asyncio.gather()` with Limits
+
+```python
+# ❌ Unbounded concurrency (can overwhelm system)
+async def fetch_all_users(user_ids: List[str]) -> List[User]:
+    tasks = [fetch_user(uid) for uid in user_ids]  # Could be 10,000!
+    return await asyncio.gather(*tasks)
+
+# ✅ Bounded concurrency (max 10 at a time)
+async def fetch_all_users(user_ids: List[str]) -> List[User]:
+    semaphore = asyncio.Semaphore(10)
+    
+    async def bounded_fetch(uid: str) -> User:
+        async with semaphore:
+            return await fetch_user(uid)
+    
+    tasks = [bounded_fetch(uid) for uid in user_ids]
+    return await asyncio.gather(*tasks)
+```
+
+**Rule:** Max 10 concurrent tasks for external APIs, 50 for internal services.
+
+---
+
+## Timeouts: Always Set Them
+
+### ✅ DO: Set Timeouts for All I/O
+
+```python
+# ❌ No timeout (can hang forever)
+async def call_api():
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url)
+        return response.json()
+
+# ✅ With timeout
+async def call_api():
+    async with httpx.AsyncClient(timeout=5.0) as client:  # 5s timeout
+        response = await client.get(url)
+        return response.json()
+
+# ✅ With cancellation
+async def call_api_with_cancel():
+    try:
+        async with asyncio.timeout(5.0):  # Python 3.11+
+            return await fetch_data()
+    except asyncio.TimeoutError:
+        logger.error("API call timed out after 5s")
+        raise
+```
+
+**Recommended Timeouts:**
+- External APIs: 5-10 seconds
+- Internal services: 2-5 seconds
+- Database queries: 1-3 seconds
+- LLM calls: 30-60 seconds
+
+---
+
+## N+1 Queries: Avoid Them
+
+### ❌ DON'T: N+1 Query Pattern
+
+```python
+# ❌ N+1 queries (1 for orders + N for users)
+async def get_orders_with_users():
+    orders = await db.fetch_all("SELECT * FROM orders")
+    for order in orders:
+        order.user = await db.fetch_one(
+            "SELECT * FROM users WHERE id = ?", order.user_id
+        )
+    return orders
+```
+
+### ✅ DO: Batch Operations
+
+```python
+# ✅ Single batch query
+async def get_orders_with_users():
+    orders = await db.fetch_all("SELECT * FROM orders")
+    user_ids = [o.user_id for o in orders]
+    
+    # Single query for all users
+    users = await db.fetch_all(
+        "SELECT * FROM users WHERE id = ANY(?)", user_ids
+    )
+    users_by_id = {u.id: u for u in users}
+    
+    for order in orders:
+        order.user = users_by_id.get(order.user_id)
+    
+    return orders
+```
+
+---
+
+## Caching: Static Metadata with TTL
+
+### ✅ DO: Cache Stable Data
+
+```python
+from functools import lru_cache
+from datetime import datetime, timedelta
+
+# ✅ Cache configuration that rarely changes
+@lru_cache(maxsize=1)
+def get_app_config():
+    return load_config_from_db()
+
+# ✅ Time-based cache with TTL
+class CachedLookup:
+    def __init__(self, ttl_seconds=300):
+        self._cache = {}
+        self._ttl = ttl_seconds
+    
+    async def get_country_codes(self):
+        now = datetime.now()
+        if "country_codes" in self._cache:
+            data, timestamp = self._cache["country_codes"]
+            if now - timestamp < timedelta(seconds=self._ttl):
+                return data
+        
+        # Cache miss or expired
+        data = await fetch_country_codes()
+        self._cache["country_codes"] = (data, now)
+        return data
+```
+
+**Cache candidates:** Config values, application settings, country codes, currency rates, enum values.
+
+---
+
+## Logging: Essential Context Only
+
+### ✅ DO: Structured JSON Logging
+
+```python
+# ✅ Structured logging with correlation ID
+logger.info(
+    "Order processed",
+    extra={
+        "order_id": order.id,
+        "user_id": user.id,
+        "amount": float(order.total),
+        "correlation_id": correlation_id,
+        "duration_ms": duration
+    }
+)
+```
+
+### ❌ DON'T: Log Everything
+
+```python
+# ❌ Too verbose
+logger.debug(f"Processing order: {order}")  # Huge object!
+logger.debug(f"Item 1: {item1}")
+logger.debug(f"Item 2: {item2}")
+# ... hundreds of log lines
+```
+
+**Log levels:**
+- ERROR: Failures requiring attention
+- WARNING: Unexpected but handled (rate limits, retries)
+- INFO: Key business events (order placed, user created)
+- DEBUG: Development only (not in production)
+
+---
+
+## Memory: Release Large Objects
+
+```python
+# ✅ Release memory explicitly for large datasets
+async def process_large_file(file_path: str):
+    data = await load_file(file_path)  # 1GB
+    
+    # Process in chunks
+    result = await process_data(data)
+    
+    # Release memory
+    del data
+    import gc
+    gc.collect()
+    
+    return result
+```
+
+---
+
+## Performance Testing
+
+### ✅ DO: Add Smoke Tests for Loops
+
+```python
+# ✅ Performance smoke test
+@pytest.mark.performance
+async def test_batch_processing_performance():
+    """Ensure batch processing handles 1000+ items efficiently."""
+    items = generate_test_items(1000)
+    
+    start = time.time()
+    await process_batch(items)
+    duration = time.time() - start
+    
+    # Should complete in under 5 seconds
+    assert duration < 5.0, f"Took {duration}s (expected <5s)"
+```
+
+**Add performance tests when:**
+- Processing >1000 items
+- Making >10 API calls
+- Handling files >10MB
+
+---
+
+**Remember:** Fast code = happy users! ⚡

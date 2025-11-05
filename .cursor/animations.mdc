@@ -1,0 +1,61 @@
+---
+globs: *.ts,*.tsx
+---
+
+# Animations Guidelines
+
+## Keep your animations fast
+
+- Animations should never be longer than 1s (unless it's illustrative), most of them should be much shorter.
+- Default to use ease-out for most animations for natural motion.
+- Keep micro-interactions under 200ms for immediate feedback.
+
+## Easing rules
+
+- Don't use built-in CSS easings unless it's `ease` or `linear`.
+
+## Animation Library Guidelines
+
+### Use Framer Motion for complex animations
+
+- **When to use Framer Motion**:
+
+  - Complex multi-step animations
+  - Gesture-based interactions (drag, swipe, pinch)
+  - Layout animations with shared elements
+  - Physics-based animations (spring, bounce)
+  - Staggered animations for lists or grids
+  - Page transitions and route animations
+
+- **When to use CSS animations**:
+  - Simple hover states
+  - Basic fade in/out effects
+  - Loading spinners
+  - Simple transforms (scale, rotate)
+
+### Framer Motion Best Practices
+
+- Use `motion` components for animated elements
+- Leverage `variants` for complex state management
+- Use `AnimatePresence` for enter/exit animations
+- Prefer `spring` animations for natural motion
+- Use `layout` prop for automatic layout animations
+- Keep animations performant with `will-change` CSS property
+
+Import motion from:
+`import { motion } from "motion/react"`
+
+## Performance Considerations
+
+- Use `transform` and `opacity` properties for animations (GPU accelerated)
+- Avoid animating `width`, `height`, `top`, `left` properties
+- Use `will-change` sparingly and remove it after animation completes
+- Consider `prefers-reduced-motion` for accessibility
+- Test animations on lower-end devices
+
+## Accessibility
+
+- Respect `prefers-reduced-motion` user preference
+- Provide alternative feedback for users who can't see animations
+- Ensure animations don't cause vestibular disorders
+- Use `@media (prefers-reduced-motion: reduce)` to disable animations when needed

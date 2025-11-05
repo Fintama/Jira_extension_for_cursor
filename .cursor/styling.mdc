@@ -1,0 +1,199 @@
+---
+globs: *.ts,*.tsx
+---
+
+# Styling Guidelines
+
+## File Structure
+
+- Prefer a `styled.ts` file alongside the component
+- If the style short, you may use `const theme = useTheme();`
+- Define styled components with clear, semantic names (e.g., `Container`, `Wrapper`, `Content`)
+
+---
+
+## Basic Styled Component
+
+### Example:
+
+```typescript
+import { Box } from "@mui/material";
+import { styled } from "@mui/material/styles";
+
+export const Container = styled(Box)(({ theme }) => ({
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+
+  [theme.breakpoints.down("md")]: {
+    padding: "16px",
+  },
+}));
+```
+
+## Complex Styled Component
+
+**When you need custom props and className merging:**
+
+### Example:
+
+```typescript
+import { Box, BoxProps } from "@mui/material";
+import { styled } from "@mui/material/styles";
+import clsx from "clsx";
+
+export const Toolbar = styled(
+  ({ className, ...props }: BoxProps) => (
+    <Box className={clsx("toolbar", className)} {...props} />
+  ),
+  {
+    shouldForwardProp: (prop) => prop !== "isComplex",
+  }
+)<{ isVisible?: boolean; isQuestion?: boolean }>(
+  ({ isVisible, isQuestion }) => ({
+    display: "flex",
+    justifyContent: "space-between",
+    // Add conditional styling based on props
+    opacity: isVisible ? 1 : 0,
+    backgroundColor: isQuestion ? "primary.light" : "background.paper",
+  })
+);
+```
+
+**Use this pattern when:**
+
+- You need to merge custom class names with component props
+- Multiple custom props control styling
+- Use `shouldForwardProp` if you want to prevent props from leaking to the DOM
+
+---
+
+## Using Variants for Conditional Styling
+
+**Prefer variants when:**
+
+- Component has conditional logic
+- Multiple style states need to be handled
+- Props control visual appearance
+
+### Example with Props:
+
+```typescript
+export const Component = styled(Box, {
+  shouldForwardProp: (prop) => prop !== "isVisible",
+})<{ isVisible: boolean }>(({ theme }) => ({
+  transition: theme.transitions.create(["opacity"], {
+    easing: theme.transitions.easing.easeInOut,
+    duration: theme.transitions.duration.standard,
+  }),
+  variants: [
+    {
+      props: { isVisible: true },
+      style: {
+        opacity: 1,
+      },
+    },
+    {
+      props: { isVisible: false },
+      style: {
+        opacity: 0,
+      },
+    },
+  ],
+}));
+```
+
+---
+
+## Accessing Theme Inside Components
+
+**When you need theme values in component logic**, use the `useTheme()` hook:
+
+```typescript
+import { useTheme } from "@mui/material/styles";
+
+function MyComponent() {
+  const theme = useTheme();
+
+  // Access theme values in component logic
+  const spacing = theme.spacing(2);
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+
+  return <Container />;
+}
+```
+
+**Use `useTheme()` when:**
+
+- Accessing theme values in JavaScript logic
+- Computing dynamic values based on theme
+- Using theme for conditional rendering
+- Passing theme values to child components
+
+---
+
+## Best Practices
+
+1. **Always use `theme`** - Access theme values for consistency
+2. **Use `useTheme()` in components** - When theme access is needed in component logic
+3. **Use `shouldForwardProp`** - Prevent custom props from being forwarded to DOM
+4. **Prefer variants** - For conditional styling over inline ternaries
+5. **Responsive design** - Use `theme.breakpoints` for media queries
+6. **Transitions** - Use `theme.transitions.create()` for smooth animations
+7. **Semantic naming** - Use descriptive names (Container, Header, Content, etc.)
+
+---
+
+## Pseudo Elements
+
+When using pseudo elements (`::before`, `::after`, etc.) for decorative purposes, always add `pointerEvents: 'none'` to prevent them from interfering with mouse interactions.
+
+### Example:
+
+```typescript
+export const Container = styled(Box)(({ theme }) => ({
+  position: "relative",
+
+  "&::after": {
+    content: '""',
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    width: "100%",
+    height: "1px",
+    background: theme.palette.divider,
+    pointerEvents: "none", // Prevents blocking clicks on the element
+  },
+}));
+```
+
+**Why use `pointerEvents: 'none'`:**
+
+- Prevents pseudo elements from blocking hover/click events on the parent element
+- Ensures child elements remain fully interactive
+- Avoids unexpected behavior with tooltips, buttons, or other interactive elements
+- Essential for absolutely positioned decorative elements (borders, dividers, backgrounds)
+
+**When to use:**
+
+- Decorative borders or dividers using pseudo elements
+- Background overlays or gradients
+- Absolutely positioned pseudo elements
+- Any pseudo element that shouldn't capture mouse events
+
+### Forwarding ref
+
+Example:
+
+```typescript
+export const SectionForm = styled(
+  // ✅ Correct: past forward ref
+  forwardRef(
+    // ✅ Correct: pas custom ref into the original component
+    (props, ref) => <Box component="form" {...props} ref={ref} />
+  )
+)(({ theme }) => ({
+  // ✅ Prefer: using theme values
+  gap: theme.spacing(2),
+}));
+```

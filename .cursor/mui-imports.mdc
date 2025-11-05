@@ -1,0 +1,41 @@
+---
+globs: *.ts,*.tsx
+---
+
+# MUI Imports Rule
+
+## Avoid Barrel Imports for @mui
+
+To optimize bundle size and improve tree-shaking, always import MUI components from their specific paths instead of using barrel imports.
+
+### ❌ Bad - Barrel Imports
+
+```typescript
+import { Button, TextField } from "@mui/material";
+import { DataGrid } from "@mui/x-data-grid";
+```
+
+### ✅ Good - Direct Imports
+
+```typescript
+import Button from "@mui/material/Button";
+import TextField from "@mui/material/TextField";
+import { DataGrid } from "@mui/x-data-grid";
+```
+
+## Why?
+
+Barrel imports (importing multiple components from the main package entry point) can:
+
+- Increase bundle size by including unnecessary code
+- Reduce the effectiveness of tree-shaking
+- Slow down build times
+
+Direct imports ensure that only the specific component code is included in your bundle.
+
+## Applies to:
+
+- `@mui/material`
+- `@mui/icons-material`
+- `@mui/lab`
+- Other `@mui/*` packages

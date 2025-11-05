@@ -1,0 +1,177 @@
+---
+description: Code style and readability standards
+globs: "*.py,*.ts,*.tsx,*.js"
+alwaysApply: true
+---
+
+# Code Style & Readability
+
+**Applied to:** All Python and TypeScript/JavaScript files.
+
+---
+
+## Naming
+
+### ✅ DO: Name for *intent*, not mechanics
+
+```python
+# ❌ Bad
+def process_data(x):
+    return x.strip().lower()
+
+# ✅ Good
+def normalize_customer_email(email: str) -> str:
+    return email.strip().lower()
+```
+
+### Conventions
+
+- **Nouns for data:** `customer_record`, `email_address`, `api_response`
+- **Verbs for actions:** `validate_input()`, `send_notification()`, `calculate_total()`
+- Be specific: `get_active_users()` not `get_users()`
+
+---
+
+## Function Size
+
+- **≤ 50 lines per function** (ideal: 10-20)
+- **≤ 120 lines per section/class**
+- If longer → extract helpers with clear names
+
+```python
+# ❌ Too long
+def process_order(order):
+    # 100 lines of validation
+    # 50 lines of calculation
+    # 30 lines of database updates
+    pass
+
+# ✅ Better
+def process_order(order: Order) -> ProcessedOrder:
+    validated = validate_order(order)
+    calculated = calculate_order_total(validated)
+    return save_order_to_database(calculated)
+```
+
+---
+
+## Control Flow
+
+### ✅ Guard Clauses Over Nested If
+
+```python
+# ❌ Deep nesting
+def process(data):
+    if data:
+        if data.is_valid():
+            if user.has_permission():
+                return do_something()
+    return None
+
+# ✅ Guard clauses
+def process(data):
+    if not data:
+        return None
+    if not data.is_valid():
+        return None
+    if not user.has_permission():
+        return None
+    
+    return do_something()
+```
+
+### Max Nesting: 3 Levels
+
+```python
+# ❌ Too deep (4 levels)
+for item in items:              # 1
+    if item.active:            # 2
+        for sub in item.subs:  # 3
+            if sub.valid:      # 4 - TOO DEEP!
+                process(sub)
+
+# ✅ Extract to helper
+for item in items:
+    if item.active:
+        process_active_item_subs(item)
+```
+
+---
+
+## Documentation
+
+### One-Line Docstrings: Explain *Why*, Not *What*
+
+```python
+# ❌ States the obvious
+def calculate_total(items: List[Item]) -> Decimal:
+    """Calculates the total of items."""
+    pass
+
+# ✅ Explains business context
+def calculate_total(items: List[Item]) -> Decimal:
+    """Includes tax and shipping; excludes promotional discounts."""
+    pass
+```
+
+### Link to Specs/Plans
+
+```python
+def apply_discount_rules(order: Order) -> Order:
+    """
+    Apply tiered discount rules based on customer segment.
+    
+    Reference: docs/specs/spec_discount_engine_v2.md
+    """
+    pass
+```
+
+---
+
+## Code Cleanliness
+
+### ✅ DO
+
+- Remove commented-out code (use git history)
+- Follow linters: `black`, `ruff` (Python), `eslint`, `prettier` (TypeScript)
+- Delete unused imports
+- Remove debug statements before committing
+
+### ❌ DON'T
+
+```python
+# ❌ Commented-out code
+# def old_implementation():
+#     return legacy_logic()
+
+# ❌ Unclear names
+def f(x, y):
+    return x + y
+
+# ❌ Magic numbers
+if price > 1000:  # What is 1000?
+    apply_discount()
+```
+
+### ✅ DO
+
+```python
+# ✅ Clear, self-documenting
+PREMIUM_TIER_THRESHOLD = 1000  # In USD
+
+def is_premium_tier(price: Decimal) -> bool:
+    return price > PREMIUM_TIER_THRESHOLD
+```
+
+---
+
+## File Organization
+
+- Group related functions
+- Public API at top, helpers at bottom
+- Imports: stdlib → third-party → local
+- One class/major concept per file (except small helpers)
+
+---
+
+**Remember:** Code is read 10x more than written. Optimize for readability! 📖

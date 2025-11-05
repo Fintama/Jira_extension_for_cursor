@@ -1,0 +1,241 @@
+---
+description: Async database testing setup - how to avoid event loop errors
+alwaysApply: true
+---
+
+# Async Database Testing Setup
+
+**Problem:** pytest-asyncio + SQLAlchemy async + AsyncPG = event loop conflicts
+
+**Symptom:** `RuntimeError: Task got Future attached to a different loop`
+
+---
+
+## Root Cause
+
+**What happens:**
+1. pytest-asyncio creates a new event loop for each test (default behavior)
+2. AsyncPG database connections are bound to a specific event loop
+3. Global database engine with connection pooling reuses connections from previous loops
+4. When test #2 runs, it tries to use connections from test #1's loop → **CRASH**
+
+---
+
+## ✅ THE SOLUTION: NullPool + Per-Test Engine + Dependency Override
+
+**File:** `backend/tests/conftest.py`
+
+```python
+import pytest
+from typing import AsyncGenerator
+from httpx import AsyncClient, ASGITransport
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.pool import NullPool  # CRITICAL!
+
+from app.main import app
+from app.core.config import settings
+
+
+@pytest.fixture(scope="function")
+async def engine():
+    """
+    Create a test database engine for each test.
+    
+    CRITICAL: Uses NullPool to avoid connection pooling across event loops.
+    Each test gets a fresh engine with the current event loop.
+    """
+    test_engine = create_async_engine(
+        str(settings.DATABASE_URL),
+        echo=False,  # Less verbose for tests
+        poolclass=NullPool,  # NO pooling - fresh connections per test
+    )
+    
+    yield test_engine
+    
+    # Clean up engine after test
+    await test_engine.dispose()
+
+
+@pytest.fixture(scope="function")
+async def session(engine) -> AsyncGenerator[AsyncSession, None]:
+    """
+    Create test database session.
+    
+    Uses real PostgreSQL database.
+    Each test gets its own session with a fresh engine (no event loop conflicts).
+    """
+    async_session_maker = async_sessionmaker(
+        engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+    
+    async with async_session_maker() as test_session:
+        try:
+            yield test_session
+        finally:
+            await test_session.close()
+
+
+@pytest.fixture(scope="function")
+async def client(engine) -> AsyncGenerator[AsyncClient, None]:
+    """
+    Create test HTTP client with overridden database dependency.
+    
+    CRITICAL: Overrides app's get_session to use test engine (NullPool).
+    This prevents event loop conflicts when API routes access database.
+    """
+    from app.core.database import get_session
+    
+    # Create test session factory from test engine
+    async_session_maker = async_sessionmaker(
+        engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+    
+    # Override dependency
+    async def override_get_session() -> AsyncGenerator[AsyncSession, None]:
+        async with async_session_maker() as session:
+            try:
+                yield session
+            finally:
+                await session.close()
+    
+    # Apply override to FastAPI app
+    app.dependency_overrides[get_session] = override_get_session
+    
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as test_client:
+            yield test_client
+    finally:
+        # Clean up override after test
+        app.dependency_overrides.clear()
+```
+
+---
+
+## Why This Works
+
+1. **NullPool** - No connection pooling, each query gets a fresh connection
+2. **Per-test engine** - New engine for each test = new event loop binding
+3. **Dependency override** - FastAPI routes use test engine (not global pooled engine)
+4. **Proper cleanup** - `await engine.dispose()` and `app.dependency_overrides.clear()` after each test
+5. **No shared state** - Each test is completely isolated
+
+**Key Insight:** BOTH direct database tests AND API tests need the test engine, not the global pooled engine.
+
+---
+
+## ❌ WRONG Approach (Don't Do This)
+
+```python
+# ❌ BAD: Global engine with connection pool
+from app.core.database import async_session  # Uses global engine!
+
+@pytest.fixture
+async def session():
+    async with async_session() as session:  # FAILS on test #2
+        yield session
+```
+
+**Why this fails:**
+- `async_session` uses the global `engine` with `StaticPool`
+- Pool holds connections from test #1's event loop
+- Test #2 gets new loop, connections are invalid → **crash**
+
+---
+
+## Alternative Solutions (Not Used)
+
+### Option 2: Session-Scoped Event Loop
+```python
+# Set pytest-asyncio to use session scope
+# pyproject.toml
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"  # One loop for all tests
+```
+
+**Pros:** Simple configuration  
+**Cons:** Tests share event loop (less isolation), can hide concurrency bugs
+
+### Option 3: Recreate Engine in Fixture
+```python
+@pytest.fixture(scope="session")
+async def engine():
+    # Create once per session
+    ...
+```
+
+**Pros:** Better performance (reuses engine)  
+**Cons:** Still has pooling issues, more complex lifecycle
+
+---
+
+## When to Use Each Approach
+
+**NullPool (Current Solution):**
+- ✅ Unit tests (many small tests)
+- ✅ Service-level tests
+- ✅ Maximum isolation
+- ❌ Slower (no pooling), but acceptable for tests
+
+**Session-Scoped Loop:**
+- ✅ Integration tests (fewer, longer tests)
+- ✅ Better performance
+- ❌ Less isolation
+
+**Current Recommendation:** Use NullPool for reliability and test isolation.
+
+---
+
+## Testing the Fix
+
+**Before fix:**
+```
+FAILED tests/test_my_feature.py - RuntimeError: Task got Future attached to a different loop
+```
+
+**After fix:**
+```
+tests/test_my_feature.py::test_something PASSED
+tests/test_my_feature.py::test_something_else PASSED
+```
+
+---
+
+## Common Mistakes
+
+### ❌ Mistake 1: Using Global Engine in Tests
+```python
+from app.core.database import engine  # DON'T!
+```
+
+### ❌ Mistake 2: Forgetting NullPool
+```python
+test_engine = create_async_engine(url)  # Missing poolclass=NullPool
+```
+
+### ❌ Mistake 3: Not Disposing Engine
+```python
+@pytest.fixture
+async def engine():
+    e = create_async_engine(url, poolclass=NullPool)
+    yield e
+    # Missing: await e.dispose()  # MEMORY LEAK!
+```
+
+---
+
+## Reference
+
+- **Pytest-asyncio docs:** https://pytest-asyncio.readthedocs.io/
+- **SQLAlchemy async:** https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html
+- **AsyncPG event loops:** https://magicstack.github.io/asyncpg/current/
+- **Phase 2 fix commit:** November 2, 2025
+
+---
+
+**Remember:** Each test = new loop = need fresh engine with NullPool! 🔄

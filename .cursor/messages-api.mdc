@@ -1,0 +1,16 @@
+---
+alwaysApply: false
+---
+
+**Available Hooks**:
+
+- `useSendMessage()`: Send new messages with streaming support
+- `useMessagesGroupsList()`: Get organized message groups for rendering
+- `useScrollToQuestionMessage()`: Smooth scroll to specific messages
+- `useLastMessageGroup()`: Access the most recent conversation
+
+**Message Types**:
+
+- `HistoryMessage`: Extended message with streaming and node information
+- `MessageNodeName`: Enum for different processing nodes (THINKER, RESEARCH_PLANNER, etc.)
+- `MessageHistoryStatus`: Loading states (idle, loading, error)

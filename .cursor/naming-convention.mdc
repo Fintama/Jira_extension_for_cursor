@@ -1,0 +1,104 @@
+---
+globs: *.ts,*.tsx
+---
+
+### Variables
+
+- Use **camelCase** for all variables
+- Examples:
+  - ✅ `rateLimitBlocked?: boolean | null;`
+  - ✅ `userName: string`
+  - ✅ `isLoading: boolean`
+  - ❌ `rate_limit_blocked?: boolean | null;`
+  - ❌ `user_name: string`
+  - ❌ `is_loading: boolean`
+
+### Interfaces and Types
+
+- Use **camelCase** for interface and type names
+- Examples:
+  - ✅ `interface UserProfile { ... }`
+  - ✅ `type MessageData = { ... }`
+  - ✅ `interface ApiResponse { ... }`
+  - ❌ `interface user_profile { ... }`
+  - ❌ `type message_data = { ... }`
+  - ❌ `interface api_response { ... }`
+
+## File Names
+
+- Prefer **kebab-case** for file names
+- Examples:
+  - ✅ `message-bubble.tsx`
+  - ✅ `use-current-time.ts`
+  - ✅ `message-actions.tsx`
+  - ❌ `MessageBubble.tsx`
+  - ❌ `useMyHook.ts`
+  - ❌ `image_preview.tsx`
+
+## TypeScript Types
+
+### Component Props
+
+- Prefer **ComponentNameProps** pattern
+- Examples:
+  - ✅ `MessageBubbleProps`
+  - ✅ `MessageActionsProps`
+  - ✅ `SidemenuChatListLinkProps`
+  - ❌ `IMessageBubbleProps`
+  - ❌ `MessageBubbleProperties`
+  - ❌ `TMessageBubbleProps`
+
+### Hook Types
+
+- Use **Use + HookName + Props** for hook parameters
+- Use **Use + HookName + Return** for hook return types
+- Examples:
+  - ✅ `UseCurrentTimeProps` and `UseCurrentTimeReturn`
+  - ✅ `UseCreateChatWithFileProps` and `UseCreateChatWithFileReturn`
+  - ✅ `UseMessageEditProps` and `UseMessageEditReturn`
+  - ❌ `IUseCurrentTimeProps`
+  - ❌ `UseCurrentTimeResult`
+  - ❌ `UseCurrentTimeReturnType`
+
+### Utility Function Parameters
+
+- **Single argument**: Use directly, no props object needed
+- **Multiple arguments**: Use an options object (not props)
+- **Type naming**: Use **Name + Options** pattern
+- Examples:
+
+  - ✅ Single argument:
+    ```typescript
+    export const formatDate = (date: Date) => { ... }
+    ```
+  - ✅ Multiple arguments with options:
+
+    ```typescript
+    type FormatDateOptions = {
+      date: Date;
+      format: string;
+      locale?: string;
+    }
+
+    export const formatDate = (options: FormatDateOptions) => { ... }
+    ```
+
+  - ❌ `formatDate(props: FormatDateProps)` - use `options` instead
+  - ❌ `formatDate(params: FormatDateParams)` - use `options` instead
+  - ❌ `FormatDateConfig` - use `Options` suffix instead
+
+### Boolean Props and Variables
+
+- Use **is/has/should** prefix for boolean flags
+- Avoid using actionable verbs for boolean names
+- Examples:
+
+  - ✅ `isDisabled` instead of `disabled`
+  - ✅ `isVisible` instead of `show`
+  - ✅ `hasError` instead of `error`
+  - ✅ `shouldRefresh` instead of `refresh`
+  - ✅ `isVisible` instead of `show`
+  - ❌ `disabled` - unclear if it's a boolean
+  - ❌ `show` - uses actionable verb
+  - ❌ `loading` - use `isLoading` instead
+  - ❌ `error` - use `hasError` instead

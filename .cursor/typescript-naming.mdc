@@ -1,0 +1,62 @@
+---
+globs: *.ts,*.tsx
+---
+
+# TypeScript File Naming Convention
+
+## File Names - ALWAYS use kebab-case
+
+All TypeScript and TypeScript React files **MUST** use **kebab-case** naming.
+
+### ✅ Correct Examples
+
+- `message-bubble.tsx` - Component files
+- `use-current-time.ts` - Custom hook files
+- `message-actions.tsx` - Component with multiple words
+- `api-client.ts` - Utility files
+- `user-profile-settings.tsx` - Component with many words
+- `format-date.ts` - Utility function files
+
+### ❌ Incorrect Examples
+
+- `MessageBubble.tsx` - PascalCase (wrong)
+- `useMyHook.ts` - camelCase (wrong)
+- `image_preview.tsx` - snake_case (wrong)
+- `UserProfileSettings.tsx` - PascalCase (wrong)
+- `APIClient.ts` - Mixed case (wrong)
+
+## TypeScript Types Naming
+
+### Component Props
+
+- Use **ComponentNameProps** pattern (PascalCase for the type itself)
+- ✅ `MessageBubbleProps`
+- ✅ `SidemenuChatListLinkProps`
+- ❌ `IMessageBubbleProps` (no I prefix)
+- ❌ `TMessageBubbleProps` (no T prefix)
+
+### Hook Types
+
+- Parameters: **Use + HookName + Props**
+- Return types: **Use + HookName + Return**
+- ✅ `UseCurrentTimeProps` and `UseCurrentTimeReturn`
+- ❌ `UseCurrentTimeResult` (use Return, not Result)
+- ❌ `IUseCurrentTimeProps` (no I prefix)
+
+### Utility Function Parameters
+
+- **Single argument**: Use directly, no options object
+- **Multiple arguments**: Use **Name + Options** pattern
+- ✅ `formatDate(date: Date)`
+- ✅ `formatDate(options: FormatDateOptions)`
+- ❌ `formatDate(props: FormatDateProps)` (use options)
+- ❌ `formatDate(params: FormatDateParams)` (use options)
+
+## Important Notes
+
+1. **File names** are in kebab-case
+2. **Component names** (inside the file) are in PascalCase
+3. **Type names** are in PascalCase
+4. **Variable and function names** are in camelCase
+
+For more detailed frontend-specific conventions, see @naming-convention.md

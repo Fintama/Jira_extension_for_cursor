@@ -1,0 +1,87 @@
+---
+globs: *.ts,*.tsx
+---
+
+# Project Architecture
+
+## Folder Structure Guidelines
+
+### General rules
+
+- For a feature | domain-layer do not create global index.ts file, exporting components, utils, hooks
+- Don't create index.ts files with exports on a root feature | layer level
+
+### Feature-Based Development (`src/features/`)
+
+**When creating a new feature**, generate a new folder under `src/features/` with the following structure:
+
+```
+src/features/
+  └── my-new-feature/
+      ├── components/
+      ├── utils/
+      └── hooks/
+```
+
+**Examples of features:**
+
+- `chat/` - Chat interface functionality
+- `file-upload/` - File upload feature
+- `notifications/` - Notification system
+- `split-view-mode/` - Split view UI feature
+
+**Use features for:**
+
+- UI-specific functionality
+- User-facing features
+- Page-level components
+- Application-specific logic
+
+---
+
+### Core Domain Logic (`src/domain/`)
+
+**For core business logic**, place files into `src/domain/` with the following structure:
+
+```
+src/domain/
+  └── my-domain/
+      ├── components/
+      ├── utils/
+      └── hooks/
+```
+
+**Examples of domain logic:**
+
+- `auth/` - Authentication business logic
+- `user/` - User management core logic
+- `messages/` - Message handling domain logic
+- `locale/` - Localization logic
+- `theme/` - Theme management
+
+**Use domain for:**
+
+- Reusable business logic
+- Core state management
+- Domain models and types
+- Cross-feature shared logic
+- API integrations
+
+---
+
+## Decision Guide
+
+### Choose `features/` when:
+
+- Building a user-facing feature
+- Creating page-specific functionality
+- Implementing UI-specific behavior
+- Feature is isolated to specific user workflows
+
+### Choose `domain/` when:
+
+- Implementing core business rules
+- Creating reusable utilities
+- Managing shared state
+- Building cross-feature functionality
+- Defining domain models

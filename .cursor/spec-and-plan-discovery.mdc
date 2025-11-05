@@ -1,0 +1,56 @@
+---
+description: Spec and plan discovery - apply before starting implementation of features or significant changes
+alwaysApply: false
+---
+
+⚠️ **MANDATORY: Before coding, ALWAYS follow this discovery process!**
+
+**This rule applies to:** Features, new agents/services, database changes, significant refactoring.
+
+## 1. Architecture Review
+- Check **AGENTS.md** for:
+  - Project structure (where does this feature belong?)
+  - Agents vs Services decision (if applicable)
+  - Prompt asset pattern requirements (if using LLM)
+  - Documentation workflow
+
+## 2. Spec & Plan Discovery
+- Look in `docs/specs/` for active specifications:
+  - File format: `spec_{feature}_v{version}.md`
+  - Contains: What to build, acceptance criteria, user stories
+  
+- Look in `docs/plans/` for active implementation plans:
+  - File format: `plan_{feature}_v{version}.md`
+  - Contains: How to build, technical approach, file changes
+
+## 3. If Missing/Incomplete
+Create or update documentation:
+- **Spec:** `docs/specs/spec_{feature}_v1.md`
+  - What does this feature do?
+  - Acceptance criteria
+  - User stories
+  - Business value
+  
+- **Plan:** `docs/plans/plan_{feature}_v1.md`
+  - Technical approach
+  - Files to create/modify
+  - Implementation steps
+  - Risks and mitigations
+  - "Now/Later" backlog
+
+## 4. Critical Review
+- **Read the spec and plan carefully**
+- **Question assumptions** - does it make sense?
+- **Check for conflicts** with existing architecture
+- **Update if needed** before proceeding
+- **Use it to guide implementation** - don't deviate without updating docs
+
+## 5. Related Guides
+If your task involves:
+- **Creating agents:** See `docs/guides/agent_guides/agent_creation_guide.md`
+- **Writing prompts:** See `docs/guides/agent_guides/prompt_writing_guide.md`
+- **Writing tests:** See `docs/guides/agent_guides/testing_guide.md`
+
+---
+
+**Remember:** Documentation comes first, then code! 📚→💻

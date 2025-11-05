@@ -1,0 +1,341 @@
+---
+description: AI/LLM prompting standards - apply when working with prompts or LLM integrations
+globs: "*.md,*.py"
+alwaysApply: false
+---
+
+# Prompting & AI Code Standards
+
+**When to apply:** 
+- Creating or editing `.md` prompt files
+- Writing code that calls LLMs (OpenAI, Anthropic, etc.)
+- Working in `prompts/` directories
+- Implementing LLM-powered features
+
+---
+
+## No Emojis in System Prompts
+
+### ❌ DON'T: Use Emojis in Prompt Files
+
+```markdown
+# ❌ Bad - Emojis in system prompt
+[ROLE]
+You are a helpful assistant 🤖
+
+**CRITICAL CONCEPT:** Extract ONLY persistent facts ✅
+
+**KEY RULES:**
+1. ✅ DO extract allergies
+2. ❌ DON'T extract actions
+```
+
+### ✅ DO: Use Plain Text Only
+
+```markdown
+# ✅ Good - No emojis in system prompt
+[ROLE]
+You are a helpful assistant
+
+**CRITICAL CONCEPT:** Extract ONLY persistent facts
+
+**KEY RULES:**
+1. DO extract allergies
+2. DON'T extract actions
+```
+
+**Why:** 
+- Emojis add unnecessary tokens
+- May affect LLM interpretation/behavior
+- Not all LLM providers handle them consistently
+- Keep prompts clean and professional
+
+**Note:** This applies to `.md` files in `prompts/` directories, not to documentation or UI text.
+
+---
+
+## Teach Principles, Not Examples
+
+### ✅ DO: Explain Concepts and Constraints
+
+```markdown
+# ✅ Good prompt - teaches principles
+**CRITICAL CONCEPT:** Extract ONLY PERSISTENT facts, NOT transient actions.
+
+**THE KEY QUESTION:** "Is this worth remembering BEYOND this conversation?"
+
+**DECISION PROCESS:**
+Q1: Is this an action request? → If YES, check if it reveals a plan
+Q2: Is this a current activity? → If YES, skip
+Q3: Is this a persistent truth? → If YES, extract
+```
+
+### ❌ DON'T: Over-fit to Examples
+
+```markdown
+# ❌ Bad prompt - just examples without principles
+Extract facts like these:
+- "I'm allergic to peanuts" → Extract
+- "I love Italian food" → Extract
+- "Can you check my emails?" → Don't extract
+```
+
+**Why:** LLM needs to generalize to novel cases. Principles > Examples.
+
+---
+
+## Strict JSON Output with Schema
+
+### ✅ DO: Always Validate with Schema
+
+```python
+from pydantic import BaseModel
+from typing import List
+
+# ✅ Define strict schema
+class FactExtraction(BaseModel):
+    facts: List[Fact]
+    confidence: float
+    reasoning: str
+
+# ✅ Validate LLM output
+async def extract_facts(message: str) -> FactExtraction:
+    prompt = build_extraction_prompt(message)
+    
+    # Call LLM with strict JSON mode
+    response = await llm.ainvoke(
+        prompt,
+        response_format={"type": "json_object"}
+    )
+    
+    # Validate against schema
+    try:
+        return FactExtraction(**response.json())
+    except ValidationError as e:
+        logger.error(f"LLM output validation failed: {e}")
+        raise
+```
+
+---
+
+## Token/Mode Caps in Prompts
+
+### ✅ DO: Include Mode Guidance
+
+```markdown
+## Response Modes
+
+**Quick Mode (≤2 minute thought):**
+- For simple queries, direct facts
+- Max 2 reasoning steps
+- Example: "What's the weather?"
+
+**Standard Mode (≤6 minute thought):**
+- For moderate complexity
+- Max 6 reasoning steps
+- Example: "Plan my week"
+
+**Deep Mode (≤10 minute thought):**
+- For complex analysis
+- Max 10 reasoning steps
+- Example: "Analyze market trends"
+```
+
+### ✅ DO: Set Token Limits
+
+```python
+# ✅ Configure token limits based on task
+QUICK_MODE_TOKENS = 500
+STANDARD_MODE_TOKENS = 2000
+DEEP_MODE_TOKENS = 4000
+
+response = await llm.ainvoke(
+    prompt,
+    max_tokens=STANDARD_MODE_TOKENS,
+    temperature=0.7
+)
+```
+
+---
+
+## Document Prompt Behavior
+
+### ✅ DO: Comment Intended Behavior and Failure Modes
+
+```python
+async def classify_intent(message: str) -> IntentClassification:
+    """
+    Classify user message into intent categories.
+    
+    Prompt behavior:
+    - Uses chain-of-thought reasoning
+    - Handles multilingual input (detects language first)
+    - Falls back to "unclear" if ambiguous
+    
+    Known failure modes:
+    - May misclassify very short messages (< 3 words)
+    - Can struggle with mixed intents (use "mixed" category)
+    - Sensitive to context; provide conversation history when available
+    
+    Reference: docs/guides/agent_guides/prompt_writing_guide.md
+    """
+    prompt = build_intent_prompt(message)
+    # ... implementation
+```
+
+---
+
+## PII Protection
+
+### ✅ DO: Strip PII Before LLM Calls
+
+```python
+import re
+
+# ✅ Redact PII before sending to LLM
+def redact_pii(text: str) -> str:
+    """Remove PII from text before LLM processing."""
+    # Redact emails
+    text = re.sub(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', '[EMAIL]', text)
+    
+    # Redact phone numbers
+    text = re.sub(r'\b\d{3}[-.]?\d{3}[-.]?\d{4}\b', '[PHONE]', text)
+    
+    # Redact credit cards
+    text = re.sub(r'\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b', '[CARD]', text)
+    
+    return text
+
+async def process_with_llm(user_message: str) -> Response:
+    # Redact PII first
+    safe_message = redact_pii(user_message)
+    
+    # Now safe to send to LLM
+    response = await llm.ainvoke(safe_message)
+    return response
+```
+
+---
+
+## Logging: Anonymized Metadata Only
+
+### ✅ DO: Log Metadata, Not Content
+
+```python
+# ✅ Log metrics without exposing content
+logger.info(
+    "LLM extraction completed",
+    extra={
+        "correlation_id": correlation_id,
+        "prompt_tokens": response.usage.prompt_tokens,
+        "completion_tokens": response.usage.completion_tokens,
+        "latency_ms": duration_ms,
+        "model": "gpt-4",
+        "facts_extracted": len(result.facts),
+        # NO actual message content or facts!
+    }
+)
+```
+
+### ❌ DON'T: Log Full Prompts/Responses
+
+```python
+# ❌ Exposes user data
+logger.debug(f"Prompt: {prompt}")  # May contain PII!
+logger.debug(f"Response: {response}")  # May contain PII!
+```
+
+---
+
+## Deterministic Testing
+
+### ✅ DO: Test Against Schema, Not Exact Output
+
+```python
+# ✅ Test schema compliance
+@pytest.mark.asyncio
+async def test_fact_extraction_schema():
+    result = await extract_facts("I'm allergic to peanuts")
+    
+    # Validate structure (not exact content)
+    assert isinstance(result, FactExtraction)
+    assert isinstance(result.facts, list)
+    assert all(isinstance(f, Fact) for f in result.facts)
+    assert 0.0 <= result.confidence <= 1.0
+```
+
+### ✅ DO: Use Mock for Deterministic Tests
+
+```python
+# ✅ Mock LLM for unit tests
+@pytest.mark.asyncio
+async def test_extraction_error_handling(mocker):
+    # Mock LLM to return invalid JSON
+    mocker.patch("llm.ainvoke", return_value='{"invalid": json}')
+    
+    with pytest.raises(ValidationError):
+        await extract_facts("test message")
+```
+
+---
+
+## Prompt Asset Pattern
+
+### ✅ DO: Follow the Pattern
+
+```
+{node_name}_helpers/
+├── prompts/
+│   ├── core.md                    # Core identity
+│   └── {variant}.md               # Task-specific
+└── prompt_builder.py              # Loads and injects
+```
+
+**See:** `docs/guides/agent_guides/prompt_writing_guide.md` for complete structure.
+
+---
+
+## Prompt Structure Template
+
+Use this proven structure (from `unified_extraction.md`):
+
+```markdown
+[ROLE]
+You are a [JOB_TITLE] for [PURPOSE].
+
+[TASK 1: NAME]
+
+**CRITICAL CONCEPT:** [Core principle]
+
+**THE KEY QUESTION:** [Guiding question]
+
+**CHAIN-OF-THOUGHT DECISION PROCESS:**
+
+For EACH item, ask IN ORDER:
+
+**Q1: [Decision point]**
+   - If YES → [action]
+   - If NO → Q2
+
+**Q2: [Decision point]**
+   - If YES → [action]
+   - If NO → Q3
+
+**EXAMPLES:**
+
+Example 1: [Scenario]
+REASONING: Q1: ... Q2: ...
+OUTPUT: [result]
+
+**KEY RULES SUMMARY:**
+1. ✅ [Rule]
+2. ❌ [Anti-pattern]
+
+[OUTPUT SCHEMA]
+Return ONLY this JSON:
+{ "field": "type" }
+```
+
+---
+
+**Remember:** Good prompts = reliable AI! 🤖

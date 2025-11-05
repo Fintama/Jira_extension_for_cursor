@@ -1,0 +1,757 @@
+---
+description: Development workflow - sequential gates for non-trivial changes
+alwaysApply: false
+---
+
+# Development Workflow (Sequential Gate)
+
+**When to use:** Multi-file changes, new features, non-trivial refactoring, bug fixes requiring investigation.
+
+**Skip for:** Typo fixes, documentation-only changes, simple one-line fixes.
+
+---
+
+## 🌿 Step 0: Branch Strategy
+
+**BEFORE starting work, confirm branching strategy with user:**
+
+### **Ask User:**
+"Should we create a new branch for this work, or continue on current branch?"
+
+### **If creating new branch, use naming convention:**
+
+```bash
+# Branch naming format: {type}/{brief-description}
+
+# Types:
+feature/{name}     # New features, capabilities
+fix/{name}         # Bug fixes
+refactor/{name}    # Code improvements, restructuring
+docs/{name}        # Documentation updates
+test/{name}        # Test additions or improvements
+```
+
+### **Examples:**
+```bash
+feature/ambiguous-entity-skip          # New features
+fix/orphan-facts-database-cleanup      # Bug fixes
+refactor/simplify-entity-resolution    # Code improvements
+docs/update-extraction-guide           # Documentation
+test/add-integration-tests             # Test additions
+```
+
+### **Branch Creation Commands:**
+```bash
+# Ensure on latest main
+git checkout main
+git pull origin main
+
+# Create new branch
+git checkout -b {type}/{descriptive-name}
+```
+
+**Rules:**
+- ✅ Use lowercase with hyphens (kebab-case)
+- ✅ Be descriptive but concise
+- ✅ Include ticket number if using: `feature/SWI-123-user-preferences`
+- ❌ Avoid special characters (&, @, #, etc.)
+- ❌ Don't reuse merged branches - always create fresh from main
+
+**Wait for user confirmation before creating branch!**
+
+---
+
+## 📋 Step 1: Create TODO List
+
+**After branch is confirmed, create a Cursor TODO list** to track workflow progress:
+
+```
+[ ] 0. Branch Strategy - Confirm/create branch (feature/fix/refactor/docs/test)
+[ ] 1. Spec/Plan Discovery - Locate plan.md in docs/plans/
+
+PER PHASE (repeat for each phase in plan.md):
+[ ] 2. Phase Planning - Create detailed sub-plan for CURRENT PHASE from plan.md
+[ ] 3. Get Approval - Present sub-plan to user, wait for explicit approval
+[ ] 4. TDD (Red) - Write tests, update container, execute, verify FAIL
+[ ] 5. Implement (Green) - Write code, update container, execute, verify PASS
+[ ] 6. File Critique - 7-point review for each file and make improvement suggestions
+[ ] 7. Refactor - Apply quality, update container, execute, verify STILL PASS
+[ ] 8. Definition of Done - Docs, tests, consumers, OpenAPI
+[ ] 9. Phase Complete - Present summary, get approval to move to next phase
+```
+
+**⚠️ MANDATORY:** Get implementation details from `docs/plans/plan_{feature}_v{version}.md`
+
+**For each phase in plan.md:**
+1. Create detailed sub-plan (Step 2)
+2. Get user approval (Step 3)
+3. Implement the phase (Steps 4-8)
+4. Present completion summary (Step 9)
+5. Get approval to proceed to next phase
+6. Repeat for next phase
+
+**Mark each TODO complete as you finish it!**
+
+---
+
+Follow this sequence for every change. **Do not proceed** until each gate passes.
+
+## 2. Spec / Plan Discovery
+
+**MANDATORY:** Check `docs/specs/` and `docs/plans/` for existing documentation.
+
+- If missing/incomplete, update:
+  - `docs/specs/spec_{feature}_v{version}.md` - What to build
+  - `docs/plans/plan_{feature}_v{version}.md` - How to build
+- Document scope, acceptance criteria, and risks
+
+**⚠️ CRITICAL:** All implementation MUST follow the implementation plan in `docs/plans/plan_{feature}_v{version}.md`
+
+## 3. Detailed Phase Planning (MANDATORY APPROVAL GATE)
+
+**⛔ NON-NEGOTIABLE:** Before implementing ANY phase from the plan.md:
+
+### **Step-by-Step Process:**
+
+1. ✅ **LOCATE the implementation plan:**
+   - Open `docs/plans/plan_{feature}_v{version}.md`
+   - Identify the current phase to implement
+
+2. ✅ **CREATE a detailed sub-plan for this phase:**
+   - List EXACTLY what files will be modified/created
+   - Specify EXACTLY what changes will be made to each file
+   - Outline the testing approach for this phase
+   - Identify any risks or dependencies
+   - Estimate complexity and potential issues
+
+3. ✅ **PRESENT the sub-plan to the user:**
+   - Show the phase from plan.md you're working on
+   - Show your detailed breakdown
+   - Request explicit approval
+
+4. ✅ **WAIT for user approval:**
+   - **DO NOT proceed without explicit user confirmation**
+   - User may request changes to the approach
+   - User may ask questions or raise concerns
+
+5. ✅ **ONLY AFTER APPROVAL:** Proceed to Step 4 (TDD Red)
+
+### **Example Detailed Sub-Plan Presentation:**
+
+```
+📋 PHASE IMPLEMENTATION PLAN
+
+From: docs/plans/plan_feature_v1.md - Phase 2: Backend Implementation
+
+Detailed Sub-Plan:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Files to Modify:
+1. backend/app/api/services/my_service.py
+   - Add new method: extract_preferences()
+   - Add input validation with Pydantic
+   - Add error handling for LLM failures
+
+2. backend/app/models.py
+   - Add UserPreference model with fields: id, user_id, category, value
+   - Add index on user_id for query performance
+
+3. backend/tests/api/services/test_my_service.py
+   - Test: valid preference extraction (business case)
+   - Test: empty message handling (edge case)
+   - Test: invalid user_id error (error case)
+   - Mark 1 test as @pytest.mark.ci_critical
+
+Testing Approach:
+- TDD: Write tests first, verify they fail
+- Use real database (not mocks)
+- Execute in Docker containers with -vv flag
+
+Risks:
+- LLM API rate limits during testing
+- Database migration may require backfill
+
+Dependencies:
+- Requires Phase 1 (database schema) to be complete
+- Depends on unified_extraction prompt pattern
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📌 Ready to proceed with this approach?
+   Please approve or suggest changes.
+```
+
+**❌ NEVER skip this approval step!**
+**❌ NEVER assume the plan - always reference the actual plan.md document!**
+**❌ NEVER implement multiple phases at once without individual approvals!**
+
+## 4. TDD (Red) - TEST PLANNING AND EXECUTION
+
+**⚠️ WHEN TO USE TDD:**
+
+TDD is **MANDATORY** for:
+- ✅ Business logic (services, agents, data transformations)
+- ✅ API endpoints with complex behavior
+- ✅ Edge cases and error handling
+- ✅ State management and workflows
+
+TDD is **OPTIONAL/SKIP** for:
+- ❌ Infrastructure setup (Docker Compose, env vars)
+- ❌ Configuration files (YAML, JSON)
+- ❌ Shell scripts (verify manually instead)
+- ❌ Simple CRUD with no business logic
+- ❌ UI-only changes with no backend logic
+
+**Use pragmatic judgment: If manual verification is faster and equally reliable, skip TDD.**
+
+---
+
+### 🛑 **Step 4.1: TEST PLANNING (APPROVAL GATE)**
+
+**⛔ MANDATORY: Before writing any tests, propose test plan and get approval!**
+
+**Process:**
+
+1. ✅ **PROPOSE test plan to user:**
+   - List what scenarios you plan to test
+   - Categorize: Business value tests, Edge cases, Error cases
+   - Identify which tests should be `ci_critical`
+   - Explain rationale for each category
+
+2. ✅ **FORMAT:**
+   ```
+   📋 TEST PLAN FOR: {Feature Name}
+   
+   BUSINESS VALUE TESTS (Golden Path):
+   1. {Test name} - {What it tests} - {Why it's valuable}
+   2. ...
+   
+   EDGE CASES (Boundary Conditions):
+   1. {Test name} - {What it tests}
+   2. ...
+   
+   ERROR CASES (Failure Scenarios):
+   1. {Test name} - {What it tests}
+   2. ...
+   
+   CI-CRITICAL TESTS (1-2 only):
+   - {Test name} - Why critical
+   
+   ESTIMATED: {N} tests total
+   
+   📌 Approve this test plan before I write tests?
+   ```
+
+3. ⏸️ **WAIT for user approval:**
+   - **DO NOT write tests without approval**
+   - User may suggest additional tests
+   - User may remove unnecessary tests
+   - User may reprioritize ci_critical tests
+
+4. ✅ **ONLY AFTER APPROVAL:** Proceed to Step 4.2
+
+**❌ NEVER skip this approval step!**
+
+---
+
+### **Step 4.2: WRITE TESTS (After Approval)**
+
+**MANDATORY ACTIONS IN THIS ORDER:**
+
+1. ✅ **WRITE comprehensive business-relevant tests** (as approved in Step 4.1)
+   - Use **real infrastructure** over mocks (databases, APIs, LLMs)
+   - Mock ONLY when: cost prohibitive, unstable, or rate-limited
+   - Tests should be deterministic and isolated
+
+2. ✅ **MARK CI tests immediately**
+   - Use `@pytest.mark.ci_critical` for 1-2 critical tests per domain
+   - Use `@pytest.mark.skipif(os.getenv("CI") == "true")` for expensive LLM tests
+
+3. ⚡ **EXECUTE TESTS in Docker containers (VERBOSE mode)** - This is MANDATORY!
+
+   **BEFORE running tests, ensure containers have latest code:**
+
+   **Option A: Quick update (for code-only changes):**
+   ```bash
+   # Copy updated Python files to running container
+   docker compose cp backend/app/. backend:/code/app/
+   docker compose cp backend/tests/. backend:/code/tests/
+   ```
+
+   **Option B: Full rebuild (for dependency or major changes):**
+   ```bash
+   # Rebuild and restart containers with latest code
+   docker compose down
+   docker compose build backend
+   docker compose up -d
+   ```
+
+   **Then EXECUTE tests in container:**
+   ```bash
+   # Run specific test file in VERBOSE mode
+   docker compose exec backend pytest tests/api/test_my_feature.py -vv
+
+   # Or run all tests
+   docker compose exec backend pytest -vv
+
+   # Or use the test script (includes coverage)
+   ./scripts/test-local.sh
+   ```
+
+   **Why verbose (-vv)?** Developer needs to see:
+   - Which tests are running in real-time
+   - Test progress in terminal
+   - Specific assertion failures
+   - Clear pass/fail status with full output
+
+4. ✅ **VERIFY tests FAIL (red)** by checking terminal output
+   - If tests pass → Tests are wrong or feature already exists
+   - If tests fail → ✅ Proceed to Step 3 (Implement)
+
+**❌ Do NOT proceed to implementation until you have executed tests and verified they fail!**
+
+### **Test Categories to Create:**
+
+**1. Business Value Tests (High-Value Scenarios)**
+```python
+# ✅ Example: Test real business scenarios
+@pytest.mark.asyncio
+async def test_colleague_creates_person_record(db, test_user):
+    """
+    Business case: "My colleague Leo got promoted"
+    Expected: Leo should be created as Person with role=colleague
+    """
+    # Test with real database, real service
+    result = await extract_entities(
+        message="My colleague Leo just got promoted to COO",
+        user_id=test_user.id
+    )
+    assert len(result.entities_created) == 1
+    assert result.entities_created[0].role == "colleague"
+```
+
+**2. Edge Cases (Boundary Conditions)**
+```python
+@pytest.mark.asyncio
+async def test_empty_message_handling(db, test_user):
+    """Edge case: Empty message should not crash"""
+    result = await extract_entities(message="", user_id=test_user.id)
+    assert result.entities_created == []
+```
+
+**3. Error Cases (Failure Scenarios)**
+```python
+@pytest.mark.asyncio
+async def test_invalid_user_id_returns_error(db):
+    """Error case: Invalid user should raise proper error"""
+    with pytest.raises(ValueError, match="User not found"):
+        await extract_entities(message="test", user_id="invalid-id")
+```
+
+---
+
+### **CI Selection: Minimal and Strategic**
+
+**CRITICAL:** After creating comprehensive tests, **immediately mark which run in CI**.
+
+**CI Test Selection Criteria:**
+
+Only 1-2 **critical** tests per domain should run in CI to keep CI fast and avoid unnecessary LLM calls.
+
+**Mark tests for CI:**
+```python
+# ✅ Mark CI-critical tests (runs in CI)
+@pytest.mark.ci_critical
+@pytest.mark.asyncio
+async def test_fact_extraction_basic_flow(db, test_user):
+    """CI: Golden path - fact extraction works end-to-end"""
+    # Most important test - must always pass
+    pass
+
+# ✅ Skip expensive tests in CI (run locally/nightly only)
+import os
+
+pytestmark = pytest.mark.skipif(
+    os.getenv("CI") == "true",
+    reason="CI: Uses real LLM calls - run locally only"
+)
+
+@pytest.mark.asyncio
+async def test_entity_disambiguation_complex_scenarios(db, test_user):
+    """Complex test with real LLM - expensive, run locally"""
+    # Comprehensive test but not needed in every CI run
+    pass
+```
+
+---
+
+### **CI Test Strategy:**
+
+**DO run in CI (mark with `@pytest.mark.ci_critical`):**
+- ✅ **Golden path** - Core functionality works end-to-end
+- ✅ **1-2 critical scenarios per domain**
+- ✅ **Regression prevention** - Tests that caught bugs before
+- ✅ **Fast tests** (<5s each, <30s total per domain)
+
+**DON'T run in CI (mark with `skipif(CI)`):**
+- ❌ **Comprehensive LLM tests** - Expensive, use real LLM calls
+- ❌ **Edge case variations** - Cover locally
+- ❌ **Performance tests** - Run in nightly builds
+- ❌ **Integration tests with external APIs** - Cost/rate limits
+
+---
+
+### **Example: Fact Extraction Domain**
+
+```python
+# ✅ CI: 1 critical test (golden path)
+@pytest.mark.ci_critical
+@pytest.mark.asyncio
+async def test_fact_extraction_basic(db, test_user):
+    """CI: Verify fact extraction works for simple case"""
+    result = await extract_facts("I'm allergic to peanuts", test_user.id)
+    assert len(result.facts) > 0
+    assert result.facts[0].type == "Allergy"
+
+# ❌ Skip in CI: Comprehensive tests with real LLM
+import os
+pytestmark = pytest.mark.skipif(
+    os.getenv("CI") == "true",
+    reason="CI: Uses real LLM calls"
+)
+
+@pytest.mark.asyncio
+async def test_persistent_vs_transient_facts(db, test_user):
+    """Comprehensive: Tests LLM's ability to distinguish persistent vs transient"""
+    # 10+ test cases with real LLM calls
+    # Expensive, but critical for quality
+    # Run locally and in nightly builds
+    pass
+
+@pytest.mark.asyncio
+async def test_entity_relationship_filtering(db, test_user):
+    """Comprehensive: Entity disambiguation with real LLM"""
+    # Complex scenarios, real LLM calls
+    pass
+```
+
+---
+
+### **CI Guidelines:**
+
+**Goal:** CI should complete in **<5 minutes** for fast feedback.
+
+**Allocation:**
+- ~10-15 critical tests total across all domains
+- Each test: <5 seconds
+- Total CI time: ~60-90 seconds for tests
+
+**Per Domain:**
+- Fact extraction: 2 critical tests
+- Intent classification: 1 critical test
+- Preference extraction: 1 critical test
+- Entity disambiguation: 2 critical tests
+- API endpoints: 1 test per major endpoint
+
+**Comprehensive tests run:**
+- Locally during development (use `pytest -v`)
+- Nightly builds (full suite)
+- Before major releases (full suite)
+
+## 5. Implement (Green) - WRITE CODE AND EXECUTE TESTS
+
+**MANDATORY ACTIONS IN THIS ORDER:**
+
+1. ✅ **WRITE minimal code** to pass tests
+   - Follow Implementation Discipline rules (see implementation-*.mdc files)
+   - Keep changes focused and incremental
+   - No hardcoded values, proper error handling
+
+2. ⚡ **EXECUTE TESTS in Docker container (VERBOSE mode)** - This is MANDATORY!
+
+   **BEFORE running tests, ensure container has latest code:**
+
+   **Quick update:**
+   ```bash
+   # Copy updated code to running container
+   docker compose cp backend/app/. backend:/code/app/
+   docker compose cp backend/tests/. backend:/code/tests/
+   ```
+
+   **Then EXECUTE tests:**
+   ```bash
+   # Run tests in container with verbose output
+   docker compose exec backend pytest tests/api/test_my_feature.py -vv
+
+   # Watch terminal to see test results
+   ```
+
+3. ✅ **VERIFY tests PASS (green)** by checking terminal output
+   - Look for green checkmarks or PASSED status in terminal
+   - If tests still fail → Debug and fix implementation
+   - If tests pass → ✅ Proceed to Step 6 (File Critique)
+
+**❌ Do NOT proceed to file critique until you have executed tests and verified they pass!**
+
+## 6. File Critique
+
+**After tests are green, review the implementation and identify improvements:**
+
+For each file touched, validate and **suggest improvements**:
+- ✅ **Spec alignment** - Matches contract & acceptance criteria
+- ✅ **Elegance** - Simplify wherever possible
+- ✅ **Robustness** - Input validation, typed errors, deterministic defaults
+- ✅ **Performance** - Batching, timeouts, concurrency-safe
+- ✅ **Cleanliness** - No dead code, clear naming, lint/typecheck passes
+- ✅ **Business sanity** - Adds value, avoids over-engineering
+- ✅ **Anti-brittle** - No locale-tied regex or keyword hacks
+
+**Output:** List of concrete improvement suggestions to apply in Step 7 (Refactor)
+
+## 7. Refactor & Hard Rules
+
+**Apply the improvements identified in the File Critique:**
+
+- Apply performance, readability, and reliability standards
+- **No hardcoded values** - use config/enums/env vars
+- Simplify control flow
+- Add timeouts and error handling
+- Implement the improvement suggestions from Step 6
+
+**MANDATORY:** After refactoring, re-run tests in Docker to ensure nothing broke:
+```bash
+docker compose cp backend/app/. backend:/code/app/
+docker compose exec backend pytest <test_file> -vv
+```
+
+**✅ Verify tests STILL PASS after refactoring!**
+
+## 8. Definition of Done
+
+- ✅ `spec.md` and `plan.md` updated
+- ✅ All tests green (unit, integration, performance smoke)
+- ✅ SDK/OpenAPI updated (if applicable)
+- ✅ Telemetry instrumented and consumers verified
+- ✅ **No brittle heuristics** introduced
+
+---
+
+## 9. Phase Completion Summary (MANDATORY APPROVAL GATE)
+
+**⛔ NON-NEGOTIABLE:** After completing each phase, BEFORE moving to the next phase:
+
+### **Step-by-Step Process:**
+
+1. ✅ **UPDATE spec.md and plan.md documents:**
+   - **MANDATORY:** Update `docs/specs/spec_{feature}_v{version}.md` if implementation differs from original spec
+   - **MANDATORY:** Update `docs/plans/plan_{feature}_v{version}.md` to reflect:
+     - Mark current phase as complete
+     - Document actual implementation (if different from plan)
+     - Update deviations and decisions made
+     - Adjust remaining phases if needed
+   - Increment version in changelog if significant changes
+   - This ensures documentation stays synchronized with reality
+
+2. ✅ **CREATE a phase completion summary:**
+   - Reference the phase from plan.md that was just implemented
+   - List what was accomplished in this phase
+   - Show files that were modified/created
+   - Highlight any deviations from the original sub-plan
+   - Report test results (all passing)
+   - Note any issues encountered and how they were resolved
+   - Identify any follow-up items or tech debt
+   - Confirm spec.md and plan.md were updated (if deviations occurred)
+
+3. ✅ **PRESENT the summary to the user:**
+   - Use a clear, structured format
+   - Include evidence of completion (e.g., test results, file changes)
+   - Be honest about any challenges or compromises
+   - Show what was updated in spec.md and plan.md (if applicable)
+
+4. ✅ **ASK for approval to proceed:**
+   - "Phase X complete. Ready to move to Phase Y?"
+   - **DO NOT proceed without explicit user confirmation**
+   - User may request changes or refinements
+   - User may want to test the current phase first
+
+5. ✅ **ONLY AFTER APPROVAL:** Loop back to Step 2 (Phase Planning) for the next phase
+
+### **Example Phase Completion Summary:**
+
+```
+✅ PHASE IMPLEMENTATION COMPLETE
+
+Phase: Phase 2 - Backend Implementation (from plan_feature_v1.md)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Accomplished:
+✅ Added extract_preferences() method to preference_extraction_service.py
+✅ Added UserPreference model to models.py with proper indexes
+✅ Created comprehensive tests in test_preference_extraction.py
+✅ All tests passing (3/3 tests green)
+✅ Marked 1 test as @pytest.mark.ci_critical
+
+Files Modified:
+- backend/app/api/services/preference_extraction_service.py (+85 lines)
+- backend/app/models.py (+42 lines)
+- backend/tests/api/services/test_preference_extraction.py (new, 120 lines)
+
+Test Results:
+  ✅ test_extract_preferences_basic - PASSED
+  ✅ test_empty_message_handling - PASSED
+  ✅ test_invalid_user_id_error - PASSED
+
+Deviations from Plan:
+- Added input validation for locale field (not in original plan)
+- Reason: Found edge case during testing
+
+Issues Resolved:
+- Initial LLM timeout issue → Added 30s timeout with retry logic
+- Database index naming conflict → Used unique index name
+
+Follow-up Items:
+- None for this phase
+
+Documentation Updates:
+✅ Updated plan_feature_v1.md:
+   - Marked Phase 2 as complete
+   - Documented locale validation deviation
+   - Added timeout configuration to implementation notes
+✅ spec_feature_v1.md: No changes needed (implementation matches spec)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Next Phase: Phase 3 - Frontend Integration
+
+📌 Phase 2 complete. Ready to proceed to Phase 3?
+   Please approve or request changes.
+```
+
+**❌ NEVER skip this approval step!**
+**❌ NEVER automatically proceed to the next phase!**
+**❌ NEVER assume user approval - always wait for explicit confirmation!**
+**❌ NEVER skip updating spec.md and plan.md when there are deviations!**
+
+---
+
+## 🔄 TDD Cycle Summary
+
+**MANDATORY SEQUENCE - Follow strictly and DO NOT SKIP TEST EXECUTION:**
+
+```
+Step 0: Branch Strategy
+├─ 1. Ask user: "Create new branch or use current?"
+├─ 2. If new: Suggest name using {type}/{description}
+├─ 3. Wait for user confirmation
+└─ 4. Create branch: git checkout -b {type}/{name}
+
+Step 1: Spec/Plan Discovery
+├─ 1. Locate docs/plans/plan_{feature}_v{version}.md
+├─ 2. Identify current phase to implement
+└─ 3. Read phase requirements and acceptance criteria
+
+Step 2-3: Detailed Phase Planning ⛔ MANDATORY APPROVAL GATE!
+├─ 1. CREATE detailed sub-plan for current phase:
+│   ├─ List EXACT files to modify/create
+│   ├─ Specify EXACT changes per file
+│   ├─ Outline testing approach
+│   ├─ Identify risks and dependencies
+│   └─ Estimate complexity
+├─ 2. PRESENT sub-plan to user
+├─ 3. ⏸️ WAIT for explicit user approval
+├─ 4. ❌ DO NOT PROCEED without approval
+└─ 5. ✅ ONLY AFTER APPROVAL: Proceed to Step 4
+
+Step 4: TDD (Red) ⛔ MUST EXECUTE TESTS IN DOCKER!
+├─ 1. Write comprehensive tests
+├─ 2. Mark CI tests (@pytest.mark.ci_critical for 1-2 per domain)
+├─ 3. 🔄 UPDATE container: docker compose cp backend/app/. backend:/code/app/
+├─ 4. 🔄 UPDATE container: docker compose cp backend/tests/. backend:/code/tests/
+├─ 5. ⚡ EXECUTE: docker compose exec backend pytest <test_file> -vv
+├─ 6. 👁️ WATCH terminal output - see test progress in real-time
+├─ 7. ✅ VERIFY: Tests FAIL (red) - check terminal for FAILED status
+└─ 8. ❌ STOP if tests don't fail - fix tests first!
+
+Step 5: Implement (Green) ⛔ MUST EXECUTE TESTS IN DOCKER!
+├─ 1. Write minimal implementation code
+├─ 2. 🔄 UPDATE container: docker compose cp backend/app/. backend:/code/app/
+├─ 3. ⚡ EXECUTE: docker compose exec backend pytest <test_file> -vv
+├─ 4. 👁️ WATCH terminal output - see test results in real-time
+├─ 5. ✅ VERIFY: Tests PASS (green) - check terminal for PASSED status
+└─ 6. ❌ STOP if tests don't pass - fix implementation!
+
+Step 6: File Critique
+├─ 1. Review each file against 7-point critique criteria:
+│   ├─ Spec alignment, Elegance, Robustness
+│   ├─ Performance, Cleanliness, Business sanity
+│   └─ Anti-brittle (no locale hacks)
+├─ 2. Identify concrete improvements to apply
+└─ 3. Document improvement suggestions for Step 7
+
+Step 7: Refactor ⛔ MUST EXECUTE TESTS IN DOCKER!
+├─ 1. Apply improvements identified in File Critique
+├─ 2. Apply code quality rules (no hardcoded values, error handling, etc.)
+├─ 3. 🔄 UPDATE container: docker compose cp backend/app/. backend:/code/app/
+├─ 4. ⚡ EXECUTE: docker compose exec backend pytest <test_file> -vv
+├─ 5. 👁️ WATCH terminal output - ensure still passing
+├─ 6. ✅ VERIFY: Tests STILL PASS
+└─ 7. ❌ STOP if tests fail - refactoring broke something!
+
+Step 8: Definition of Done
+├─ 1. Verify Definition of Done checklist
+├─ 2. Update spec.md and plan.md if needed
+├─ 3. Verify SDK/OpenAPI updated (if applicable)
+└─ 4. All tests green, no brittle heuristics
+
+Step 9: Phase Completion Summary ⛔ MANDATORY APPROVAL GATE!
+├─ 1. UPDATE spec.md and plan.md:
+│   ├─ Update plan.md: Mark phase complete, document deviations
+│   ├─ Update spec.md: If implementation differs from spec
+│   └─ Ensure documentation reflects actual implementation
+├─ 2. CREATE completion summary:
+│   ├─ Reference phase from plan.md
+│   ├─ List accomplishments
+│   ├─ Show files modified/created
+│   ├─ Report test results
+│   ├─ Note deviations and issues resolved
+│   ├─ Identify follow-up items
+│   └─ Confirm spec.md and plan.md updated
+├─ 3. PRESENT summary to user
+├─ 4. ASK: "Phase X complete. Ready to move to Phase Y?"
+├─ 5. ⏸️ WAIT for explicit user approval
+├─ 6. ❌ DO NOT proceed to next phase without approval
+└─ 7. ✅ ONLY AFTER APPROVAL: Loop back to Step 2 for next phase
+```
+
+**⚠️ CRITICAL:**
+- **NEVER skip phase planning and approval!** (Steps 2-3)
+- **NEVER implement without referencing the plan.md document!**
+- **NEVER proceed without explicit user approval on the detailed sub-plan!**
+- **NEVER skip test execution!** (Steps 4-5, 7)
+- **NEVER skip file critique!** (Step 6 - identify improvements BEFORE refactoring)
+- **NEVER skip phase completion summary and approval!** (Step 9)
+- **NEVER skip updating spec.md and plan.md when there are deviations!** (Step 9)
+- **NEVER automatically move to the next phase!**
+- **ALWAYS run tests after writing them (Step 4 - TDD Red)**
+- **ALWAYS run tests after implementing (Step 5 - TDD Green)**
+- **ALWAYS do file critique BEFORE refactoring (Step 6)**
+- **ALWAYS run tests after refactoring (Step 7 - verify still passing)**
+- **ALWAYS update spec.md and plan.md after each phase** (Step 9)
+- **ALWAYS present completion summary after each phase (Step 9)**
+- **ALWAYS wait for approval before moving to next phase**
+- **ALWAYS update TODO list** as you complete each step
+
+**Key Principles:**
+- Planning is NOT optional - you MUST create detailed sub-plans per phase!
+- User approval is NOT optional - you MUST wait for confirmation BEFORE and AFTER each phase!
+- Writing tests is NOT enough - you MUST execute them!
+- File critique comes BEFORE refactoring - identify improvements first, then apply them!
+- Refactoring requires re-running tests - ensure nothing broke!
+- Documentation MUST stay synchronized with reality - update spec.md and plan.md after each phase!
+- Completing a phase is NOT enough - you MUST present summary and get approval!
+
+**Tracking:** Use Cursor TODO list to track workflow progress (see Step 1 above)
+
+---
+
+**Remember:** Quality gates and approval gates prevent technical debt and misalignment! 🚦

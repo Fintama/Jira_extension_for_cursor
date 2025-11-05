@@ -1,0 +1,390 @@
+# OpenAPI & API Development Workflow
+
+**Applied to:** All API route files, router definitions, Pydantic models
+
+**Purpose:** Prevent OpenAPI spec drift and TypeScript generation failures
+
+**Priority:** CRITICAL - Must follow when touching any API code
+
+---
+
+## 🚨 **CRITICAL: Three Rules That Will Save You 8 Hours**
+
+### **Rule 1: ONE Tag Per Router (Always)**
+
+```python
+# ❌ NEVER DO THIS - Causes duplicate TypeScript exports
+router = APIRouter(prefix="/admin/fact-config", tags=["admin", "configuration"])
+
+# ✅ ALWAYS DO THIS - Single tag only
+router = APIRouter(prefix="/admin/fact-config", tags=["admin"])
+```
+
+**Why:** TypeScript generator creates separate API classes per tag. Multiple tags = duplicate exports = CI failure.
+
+**When:** Creating ANY new router or modifying router tags
+
+---
+
+### **Rule 2: Domain-Prefixed Model Names (Always)**
+
+```python
+# ❌ NEVER DO THIS - Generic names cause conflicts
+class UpdateRequest(BaseModel):
+    config: Dict[str, Any]
+
+class SyncResponse(BaseModel):
+    status: str
+
+# ✅ ALWAYS DO THIS - Domain-specific prefix
+class FactConfigUpdateRequest(BaseModel):
+    config: Dict[str, Any]
+
+class FactConfigSyncResponse(BaseModel):
+    status: str
+```
+
+**Why:** As codebase grows, generic names WILL collide. TypeScript generator creates duplicate type exports.
+
+**Pattern:** `{Domain}{Action}{Request|Response}` (e.g., `UserLoginRequest`, `OrderCreateResponse`)
+
+**When:** Creating ANY Pydantic model used in API endpoints
+
+---
+
+### **Rule 3: Regenerate OpenAPI Spec After Merging Main (Always)**
+
+```bash
+# After git merge main OR git rebase main:
+
+# 1. Rebuild backend with latest code
+docker compose build backend
+docker compose up -d backend
+sleep 10
+
+# 2. Generate spec
+docker compose exec backend python -c "
+import app.main, json
+data = app.main.app.openapi()
+with open('/tmp/spec.json', 'w') as f: json.dump(data, f, indent=2)
+"
+
+# 3. Copy to host
+docker compose cp backend:/tmp/spec.json frontend/openapi/Swisper_Internal_api_v1.json
+
+# 4. Commit IMMEDIATELY
+git add frontend/openapi/Swisper_Internal_api_v1.json
+git commit -m "chore: regenerate OpenAPI spec after merging main"
+git push
+```
+
+**Why:** Main branch may have new endpoints. Committed spec must match current backend code or CI will fail.
+
+**When:** IMMEDIATELY after ANY merge or rebase with main
+
+---
+
+## 📋 **Workflow Checklist**
+
+### **Creating New API Endpoint**
+
+```python
+# File: backend/app/api/routes/admin/my_feature.py
+
+from fastapi import APIRouter
+from pydantic import BaseModel
+
+# ✅ Step 1: ONE tag only
+router = APIRouter(prefix="/admin/my-feature", tags=["admin"])
+
+# ✅ Step 2: Domain-prefixed model names
+class MyFeatureCreateRequest(BaseModel):
+    """Request model for creating my-feature"""
+    name: str
+    value: int
+
+class MyFeatureResponse(BaseModel):
+    """Response model for my-feature operations"""
+    id: str
+    name: str
+    value: int
+
+# ✅ Step 3: Unique operation_id (optional but recommended)
+@router.post("", response_model=MyFeatureResponse, operation_id="my_feature-create")
+async def create_my_feature(request: MyFeatureCreateRequest):
+    ...
+
+@router.get("/{id}", response_model=MyFeatureResponse, operation_id="my_feature-get")
+async def get_my_feature(id: str):
+    ...
+```
+
+**After creating endpoint:**
+
+```bash
+# 1. Test locally
+docker compose up -d backend
+
+# 2. Regenerate OpenAPI spec
+docker compose exec backend python -c "
+import app.main, json
+data = app.main.app.openapi()
+with open('/tmp/spec.json', 'w') as f: json.dump(data, f, indent=2)
+"
+docker compose cp backend:/tmp/spec.json frontend/openapi/Swisper_Internal_api_v1.json
+
+# 3. Commit spec WITH your feature code
+git add backend/app/api/routes/admin/my_feature.py
+git add frontend/openapi/Swisper_Internal_api_v1.json
+git commit -m "feat: add my-feature API endpoint
+
+- Added POST /admin/my-feature (create)
+- Added GET /admin/my-feature/{id} (get)
+- Regenerated OpenAPI spec"
+```
+
+---
+
+### **Modifying Existing API Endpoint**
+
+**If you change:**
+- Request/response models
+- Endpoint path
+- HTTP method
+- Tags
+
+**Then you MUST:**
+1. Make your changes
+2. Regenerate OpenAPI spec
+3. Commit both code + spec together
+
+```bash
+# After modifying endpoint
+docker compose exec backend python -c "..."
+docker compose cp backend:/tmp/spec.json frontend/openapi/Swisper_Internal_api_v1.json
+git add backend/app/api/routes/...
+git add frontend/openapi/Swisper_Internal_api_v1.json
+git commit -m "fix: update endpoint XYZ
+
+- Changed response model
+- Regenerated OpenAPI spec"
+```
+
+---
+
+### **After Merging/Rebasing Main**
+
+**MANDATORY - Do this IMMEDIATELY:**
+
+```bash
+# 1. Merge/rebase
+git checkout feature/my-feature
+git merge main  # or: git rebase main
+
+# 2. IMMEDIATELY regenerate spec (use Fast Fix command)
+docker compose build backend
+docker compose up -d backend
+sleep 10
+docker compose exec backend python -c "
+import app.main, json
+data = app.main.app.openapi()
+with open('/tmp/spec.json', 'w') as f: json.dump(data, f, indent=2)
+"
+docker compose cp backend:/tmp/spec.json frontend/openapi/Swisper_Internal_api_v1.json
+
+# 3. Commit as separate commit
+git add frontend/openapi/Swisper_Internal_api_v1.json
+git commit -m "chore: regenerate OpenAPI spec after merging main"
+git push
+```
+
+**Why this is MANDATORY:**
+- Main may have new endpoints from other developers
+- Your committed spec is now incomplete
+- CI WILL fail with "Files are different"
+- You WILL waste hours debugging
+
+---
+
+## 🚫 **Common Mistakes to Avoid**
+
+### **Mistake 1: Multiple Tags**
+
+```python
+# ❌ NO - Creates AdminApi.ts AND ConfigurationApi.ts
+router = APIRouter(tags=["admin", "configuration"])
+
+# ❌ NO - Creates UserApi.ts AND AuthApi.ts
+router = APIRouter(tags=["users", "authentication"])
+
+# ✅ YES - Creates AdminApi.ts only
+router = APIRouter(tags=["admin"])
+
+# ✅ YES - Creates AuthApi.ts only
+router = APIRouter(tags=["authentication"])
+```
+
+---
+
+### **Mistake 2: Generic Model Names**
+
+```python
+# ❌ NO - Will conflict with other routers
+class CreateRequest(BaseModel):
+    ...
+
+class UpdateRequest(BaseModel):
+    ...
+
+class Response(BaseModel):
+    ...
+
+# ✅ YES - Domain-specific, won't conflict
+class UserCreateRequest(BaseModel):
+    ...
+
+class UserUpdateRequest(BaseModel):
+    ...
+
+class UserResponse(BaseModel):
+    ...
+```
+
+---
+
+### **Mistake 3: Forgetting to Regenerate After Merge**
+
+```bash
+# ❌ This leads to 8 hours of debugging:
+git merge main
+# ... make some changes ...
+git push  # Forgot to regenerate OpenAPI spec!
+
+# ✅ This takes 2 minutes:
+git merge main
+# IMMEDIATELY:
+docker compose build backend && docker compose exec backend python -c "..." && ...
+git add frontend/openapi/*.json && git commit -m "chore: regenerate OpenAPI spec"
+git push
+```
+
+---
+
+## 🔍 **Pre-Push Validation (AI Assistant)**
+
+**Before allowing ANY push, AI Assistant MUST verify:**
+
+```python
+# Pseudo-code for AI validation
+def validate_before_push():
+    changes = git_diff()
+
+    # Check 1: If router files changed, verify single tag
+    if any("routes/" in f and ".py" in f for f in changes):
+        for file in router_files:
+            routers = extract_routers(file)
+            for router in routers:
+                if len(router.tags) > 1:
+                    raise Error(f"❌ {file}: Router has multiple tags {router.tags}. Use ONE tag only!")
+
+    # Check 2: If Pydantic models changed, verify domain prefix
+    if any("Request" in code or "Response" in code for code in changes):
+        models = extract_pydantic_models()
+        for model in models:
+            if model.name in ["Request", "Response", "UpdateRequest", "CreateRequest", "SyncResponse"]:
+                raise Error(f"❌ Generic model name '{model.name}'. Use domain prefix (e.g., UserCreateRequest)")
+
+    # Check 3: If routes changed, verify OpenAPI spec also changed
+    routes_changed = any("routes/" in f for f in changes)
+    spec_changed = "frontend/openapi/Swisper_Internal_api_v1.json" in changes
+
+    if routes_changed and not spec_changed:
+        raise Error(f"❌ Routes changed but OpenAPI spec not regenerated! Run: docker compose exec backend python -c '...'")
+
+    # Check 4: If main was merged, verify OpenAPI spec was regenerated
+    recent_commits = git_log(n=5)
+    if any("Merge branch 'main'" in c for c in recent_commits):
+        commits_after_merge = get_commits_after_last_merge()
+        if not any("regenerate OpenAPI spec" in c for c in commits_after_merge):
+            raise Error(f"❌ Merged main but didn't regenerate OpenAPI spec! This is MANDATORY.")
+```
+
+**AI Assistant: If ANY of these checks fail, STOP and tell user to fix before pushing.**
+
+---
+
+## 🎯 **Quick Reference (Bookmark This)**
+
+| Scenario | Action | Command |
+|----------|--------|---------|
+| Creating new router | Use ONE tag | `tags=["domain"]` |
+| Creating Pydantic model | Use domain prefix | `class DomainActionRequest(BaseModel)` |
+| Modified any endpoint | Regenerate spec | `docker compose exec backend python -c "..."` |
+| Merged main | Regenerate spec IMMEDIATELY | See Fast Fix command above |
+| Before pushing | Verify spec is updated | `git status` should show spec if routes changed |
+
+---
+
+## 📚 **Related Documentation**
+
+- **Full Guide:** `docs/guides/agent_guides/openapi_PR_fix_guide.md`
+- **Lessons Learned:** See v1.1 of guide (3 root causes documented)
+- **Fast Fix Command:** See guide's Quick Reference section
+
+---
+
+## ⚡ **Fast Fix Commands (Copy-Paste)**
+
+### **Regenerate OpenAPI Spec (Standard)**
+
+```bash
+cd /root/projects/helvetiq && \
+docker compose build backend && \
+docker compose up -d backend && \
+sleep 10 && \
+docker compose exec backend python -c "
+import app.main, json
+data = app.main.app.openapi()
+with open('/tmp/spec.json', 'w') as f: json.dump(data, f, indent=2)
+" && \
+docker compose cp backend:/tmp/spec.json frontend/openapi/Swisper_Internal_api_v1.json && \
+echo "✅ OpenAPI spec regenerated!"
+```
+
+### **After Merge (Includes Commit)**
+
+```bash
+cd /root/projects/helvetiq && \
+docker compose build backend && \
+docker compose up -d backend && \
+sleep 10 && \
+docker compose exec backend python -c "
+import app.main, json
+data = app.main.app.openapi()
+with open('/tmp/spec.json', 'w') as f: json.dump(data, f, indent=2)
+" && \
+docker compose cp backend:/tmp/spec.json frontend/openapi/Swisper_Internal_api_v1.json && \
+git add frontend/openapi/Swisper_Internal_api_v1.json && \
+git commit -m "chore: regenerate OpenAPI spec after merging main" && \
+git push && \
+echo "✅ Spec regenerated and pushed!"
+```
+
+---
+
+## 🚨 **Remember**
+
+**These 3 rules prevent 8+ hours of debugging:**
+
+1. ✅ **ONE tag per router**
+2. ✅ **Domain-prefixed model names**
+3. ✅ **Regenerate after merge**
+
+**Cost of following:** 2-5 minutes
+**Cost of not following:** 3-8 hours of debugging + blocked PR + frustrated team
+
+**The choice is yours.** 😊
+
+---
+
+**Questions?** See `docs/guides/agent_guides/openapi_PR_fix_guide.md` for detailed explanations and troubleshooting.

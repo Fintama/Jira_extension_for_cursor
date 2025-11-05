@@ -1,0 +1,223 @@
+---
+globs: *.ts,*.tsx
+---
+
+# React Component Guidelines
+
+## Import Preferences
+
+**Use absolute imports with the `@/` prefix for cross-directory imports.**
+
+### ❌ Avoid:
+
+```typescript
+import { formatDateFromNow } from "../utils";
+import { SomeComponent } from "../../components/SomeComponent";
+```
+
+### ✅ Preferred:
+
+```typescript
+import { formatDateFromNow } from "@/domain/date-time/utils";
+import { SomeComponent } from "@/features/components/SomeComponent";
+```
+
+### Exception:
+
+Relative imports are allowed for files in the same folder:
+
+```typescript
+import { Container } from "./styled";
+import { helper } from "./helpers";
+```
+
+### Benefits:
+
+- Clearer module paths that are independent of file location
+- Easier refactoring when moving files
+- Better readability and understanding of project structure
+- Avoids confusion with deeply nested relative paths
+
+## Function Declaration Style
+
+**Use function component declarations instead of const arrow functions.**
+
+### ❌ Avoid:
+
+```typescript
+const MyComponent = () => {
+  return <div>Hello World</div>;
+};
+
+export default MyComponent;
+```
+
+### ✅ Preferred:
+
+```typescript
+interface MyComponentProps {
+  title?: ReactNode;
+}
+
+export function MyComponent({ title }: MyComponentProps) {
+  return <h6>{title}</h6>;
+}
+```
+
+### Benefits:
+
+- Better hoisting behavior
+- Clearer stack traces for debugging
+- More consistent with traditional JavaScript function declarations
+- Easier to read and understand component boundaries
+
+## Hide business logic into hook
+
+**For complex business logic, extract it into a custom hook using the `useComponentName` naming pattern.**
+
+### ❌ Avoid:
+
+```typescript
+export function UserProfile({ userId }: UserProfileProps) {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      setLoading(true);
+      try {
+        const response = await api.getUser(userId);
+        setUser(response.data);
+      } catch (err) {
+        setError(err as Error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUser();
+  }, [userId]);
+
+  const handleUpdate = async (data: UserUpdate) => {
+    // More complex logic here...
+  };
+
+  return loading ? <Spinner /> : <div>{user?.name}</div>;
+}
+```
+
+### ✅ Preferred:
+
+```typescript
+// hooks.ts
+export function useUserProfile(userId: string) {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      setLoading(true);
+      try {
+        const response = await api.getUser(userId);
+        setUser(response.data);
+      } catch (err) {
+        setError(err as Error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUser();
+  }, [userId]);
+
+  const handleUpdate = async (data: UserUpdate) => {
+    // Complex logic here...
+  };
+
+  return { user, loading, error, handleUpdate };
+}
+
+// user-profile.tsx
+export function UserProfile({ userId }: UserProfileProps) {
+  const { user, loading } = useUserProfile(userId);
+
+  return loading ? <Spinner /> : <div>{user?.name}</div>;
+}
+```
+
+### When to use hooks:
+
+- **Extract to hook**: When the component has significant state management, side effects, or business logic
+- **Keep in component**: For simple logic like basic state toggles, single event handlers, or straightforward conditional rendering
+
+### Benefits:
+
+- Separates presentation from business logic
+- Makes components easier to read and understand
+- Improves testability by isolating logic
+- Enables logic reuse across multiple components
+- Reduces component complexity and cognitive load
+
+## Imports
+
+**Organize imports in a consistent order: React first, external dependencies, blank line, project imports, blank line, local imports.**
+
+### ❌ Avoid:
+
+```typescript
+import { styled } from "./styled";
+import { useMessageActions } from "./hooks";
+import { Button } from "@mui/material";
+import { MessageActionsProps } from "./types"; // ❌ Missing 'type' keyword
+import { formatDate } from "@/domain/date-time/utils";
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { MessageBubble } from "@/features/messages/components";
+```
+
+### ✅ Preferred:
+
+```typescript
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { Button } from "@mui/material";
+
+import { getUserContext } from "@/utils/userContext";
+import { formatDate } from "@/domain/date-time/utils";
+import { MessageBubble } from "@/features/messages/components";
+
+import { useMessageActions } from "./hooks";
+import type { MessageActionsProps } from "./types"; // ✅ Using 'type' keyword
+import { styled } from "./styled";
+```
+
+**Note**: Always use `import type { }` when importing TypeScript types and interfaces. This ensures type-only imports are removed during transpilation and don't create unnecessary runtime dependencies.
+
+### Import Order:
+
+1. React dependency is first
+2. External dependencies are next
+3. Blank line
+4. Global project imports:
+   - `@/utils` imports
+   - `@/domain` imports
+   - `@/features` imports
+5. Blank line
+6. Local files (`./`) always at bottom
+
+### Local files order:
+
+- `utils.ts`
+- `hooks.ts`
+- `components.ts`
+- `types.ts`
+- `styled.ts`
+
+### Benefits:
+
+- Consistent structure across all components
+- Easy to locate specific imports at a glance
+- Clear separation between external and internal dependencies
+- Reduces merge conflicts when multiple developers work on same files

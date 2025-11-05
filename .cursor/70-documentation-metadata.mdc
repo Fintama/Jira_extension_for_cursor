@@ -1,0 +1,424 @@
+---
+description: Documentation metadata standards - apply when creating or editing documentation files
+globs: "docs/**/*.md,*.md,!README.md,!AGENTS.md"
+alwaysApply: true
+---
+
+# Documentation Metadata Standards
+
+**Applied to:** All documentation files in `docs/`, excluding README.md and AGENTS.md
+
+**Purpose:** Ensure all documentation has proper metadata for tracking changes, versions, and ownership.
+
+**⚠️ FOR AI ASSISTANTS:** When updating "Last Updated By", use the ACTUAL current user's name from the user_info context (e.g., "heiko" from workspace path `C:\Users\heiko\...`). NEVER use "AI Assistant" or generic placeholders.
+
+---
+
+## 📋 Mandatory Metadata Block
+
+**EVERY documentation file MUST start with this metadata block:**
+
+```markdown
+# [Document Title]
+
+**Version:** v1.0  
+**Last Updated:** YYYY-MM-DD  
+**Last Updated By:** [actual-username]  ← Use ACTUAL user's name (e.g., "heiko"), NOT "AI Assistant"
+**Status:** [Draft | Active | Archived | Deprecated]
+
+---
+
+## Changelog
+
+### v1.0 - YYYY-MM-DD
+- Initial version
+- [Brief description of what was added]
+
+---
+
+[Rest of document content...]
+```
+
+---
+
+## ✅ When to Update Metadata
+
+### **Creating New Documentation:**
+
+```markdown
+# Feature Name Guide
+
+**Version:** v1.0  
+**Last Updated:** 2025-10-29  
+**Last Updated By:** heiko  
+**Status:** Active
+
+---
+
+## Changelog
+
+### v1.0 - 2025-10-29
+- Initial creation
+- Added overview section
+- Added implementation details
+- Added examples
+
+---
+
+## Overview
+[Your content here...]
+```
+
+---
+
+### **Updating Existing Documentation:**
+
+**ALWAYS increment version and update metadata:**
+
+```markdown
+# Feature Name Guide
+
+**Version:** v1.1  ← Increment minor version
+**Last Updated:** 2025-10-30  ← Update date
+**Last Updated By:** heiko  ← Update author
+**Status:** Active
+
+---
+
+## Changelog
+
+### v1.1 - 2025-10-30  ← Add new entry at top
+- Fixed typo in examples section
+- Updated API endpoint references
+- Added troubleshooting section
+
+### v1.0 - 2025-10-29
+- Initial creation
+- Added overview section
+
+---
+
+[Rest of document...]
+```
+
+---
+
+## 📊 Version Numbering
+
+### **Semantic Versioning for Docs:**
+
+**Format:** `vMAJOR.MINOR`
+
+**MAJOR (v1.0 → v2.0):**
+- Complete rewrite
+- Major structural changes
+- Breaking changes in documented APIs
+- Fundamental approach changes
+
+**MINOR (v1.0 → v1.1):**
+- New sections added
+- Significant content additions
+- Updated examples
+- Clarifications and improvements
+
+**Don't increment for:**
+- Typo fixes (still update Last Updated date)
+- Formatting changes
+- Link corrections
+
+---
+
+## 🏷️ Status Values
+
+Use one of these status values:
+
+| Status | Meaning | When to Use |
+|--------|---------|-------------|
+| **Draft** | Work in progress, not yet reviewed | Creating new docs, major updates in progress |
+| **Active** | Current, approved, in use | After review/approval, primary reference docs |
+| **Archived** | Historical reference, superseded | Moved from `docs/specs/` or `docs/plans/` to `docs/archive/` |
+| **Deprecated** | Outdated, don't use | Old practices, replaced by newer docs |
+
+---
+
+## 📁 Document Type Guidelines
+
+### **Specs (`docs/specs/`):**
+
+```markdown
+# Spec: Feature Name v1
+
+**Version:** v1.0  
+**Last Updated:** 2025-10-29  
+**Last Updated By:** heiko  
+**Status:** Active  ← "Active" during development
+
+---
+
+## Changelog
+
+### v1.0 - 2025-10-29
+- Initial specification
+- Defined acceptance criteria
+- Added user stories
+
+---
+
+[Spec content...]
+```
+
+**After PR merge:**
+- Move to `docs/archive/`
+- Change status to "Archived"
+
+---
+
+### **Plans (`docs/plans/`):**
+
+```markdown
+# Plan: Feature Implementation v1
+
+**Version:** v1.0  
+**Last Updated:** 2025-10-29  
+**Last Updated By:** heiko  
+**Status:** Active  ← "Active" during development
+
+---
+
+## Changelog
+
+### v1.0 - 2025-10-29
+- Initial implementation plan
+- Defined technical approach
+- Listed file changes
+
+---
+
+[Plan content...]
+```
+
+**After PR merge:**
+- Move to `docs/archive/`
+- Change status to "Archived"
+
+---
+
+### **Guides (`docs/guides/`):**
+
+```markdown
+# Feature Name Guide
+
+**Version:** v1.0  
+**Last Updated:** 2025-10-29  
+**Last Updated By:** heiko  
+**Status:** Active  ← "Active" as living documentation
+
+---
+
+## Changelog
+
+### v1.1 - 2025-11-05
+- Added troubleshooting section
+- Updated API examples
+
+### v1.0 - 2025-10-29
+- Initial guide creation post-implementation
+- Added usage examples
+
+---
+
+[Guide content...]
+```
+
+**Guides are living docs:**
+- Status stays "Active"
+- Version increments as updated
+- Never archived (unless deprecated)
+
+---
+
+### **Architecture Docs (`docs/Documentation/`):**
+
+```markdown
+# System Architecture
+
+**Version:** v2.0  
+**Last Updated:** 2025-10-29  
+**Last Updated By:** heiko  
+**Status:** Active
+
+---
+
+## Changelog
+
+### v2.0 - 2025-10-29
+- Major refactor: Added LangGraph agent system
+- Updated state management section
+- Added voice system architecture
+
+### v1.0 - 2025-01-15
+- Initial architecture documentation
+
+---
+
+[Architecture content...]
+```
+
+**Architecture docs:**
+- Long-lived, frequently updated
+- Version increments with major changes
+- Status stays "Active"
+
+---
+
+## ✅ Metadata Update Checklist
+
+Before committing documentation changes:
+
+- [ ] **Version incremented** (if significant changes)
+- [ ] **Last Updated date** set to today (YYYY-MM-DD format)
+- [ ] **Last Updated By** set to your name/username
+- [ ] **Status** is appropriate (Draft/Active/Archived/Deprecated)
+- [ ] **Changelog entry added** at top with:
+  - [ ] Version number
+  - [ ] Date
+  - [ ] Bullet points of what changed
+- [ ] **Changelog sorted** - newest at top
+
+---
+
+## 🚫 Common Mistakes
+
+### ❌ DON'T:
+
+```markdown
+# My Feature Guide
+
+[Content with no metadata...]
+```
+
+```markdown
+# My Feature Guide
+
+Last updated: sometime in October
+By: someone
+
+[No version, no changelog...]
+```
+
+### ✅ DO:
+
+```markdown
+# My Feature Guide
+
+**Version:** v1.0  
+**Last Updated:** 2025-10-29  
+**Last Updated By:** heiko  
+**Status:** Active
+
+---
+
+## Changelog
+
+### v1.0 - 2025-10-29
+- Initial creation
+- Added examples
+
+---
+
+[Content...]
+```
+
+---
+
+## 🔄 When Moving Docs to Archive
+
+When moving specs/plans to `docs/archive/`:
+
+1. **Update Status:**
+```markdown
+**Status:** Archived  ← Change from "Active" to "Archived"
+```
+
+2. **Add Changelog Entry:**
+```markdown
+## Changelog
+
+### v1.1 - 2025-10-30  ← Add entry
+- Moved to archive after PR #482 merged
+- Implementation complete
+
+### v1.0 - 2025-10-29
+- Initial creation
+```
+
+3. **Move File:**
+```bash
+mv docs/specs/spec_feature_v1.md docs/archive/
+mv docs/plans/plan_feature_v1.md docs/archive/
+```
+
+---
+
+## 📝 Template for New Docs
+
+Copy this template when creating new documentation:
+
+```markdown
+# [Document Title]
+
+**Version:** v1.0  
+**Last Updated:** YYYY-MM-DD  
+**Last Updated By:** [actual-username]  ← Use ACTUAL user's name from user_info
+**Status:** Draft
+
+---
+
+## Changelog
+
+### v1.0 - YYYY-MM-DD
+- Initial creation
+- [Brief description of sections added]
+
+---
+
+## Overview
+
+[Your content here...]
+
+## [Section 2]
+
+[Content...]
+
+---
+
+## Related Documentation
+
+- Link to related docs
+- Link to source code
+
+---
+
+**Questions?** Contact [team/person] or see [related docs].
+```
+
+---
+
+## ⚠️ CRITICAL Rules
+
+**ALWAYS do this when touching documentation:**
+
+1. ✅ **Check metadata exists** - If missing, add it
+2. ✅ **Update "Last Updated" date** - Set to today (YYYY-MM-DD format)
+3. ✅ **Update "Last Updated By"** - Use the ACTUAL current user's name from user_info (e.g., "heiko"), NEVER use "AI Assistant" or generic placeholders
+4. ✅ **Add changelog entry** - Brief description of changes
+5. ✅ **Increment version** - If significant changes (not just typos)
+6. ✅ **Update status** - If moving to archive or deprecating
+
+**NEVER commit documentation without proper metadata!**
+
+**⚠️ IMPORTANT:** When you (AI Assistant) update documentation, the "Last Updated By" field should reflect the ACTUAL USER who is working with you, not "AI Assistant". Extract the username from the user_info context (e.g., from workspace path "C:\Users\heiko\..." → use "heiko").
+
+---
+
+**Remember:** Documentation metadata helps track changes and ownership! 📚✨

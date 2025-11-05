@@ -1,0 +1,315 @@
+---
+description: Database and model change policy - apply when modifying models, schemas, or database
+globs: "models.py,**/models/*.py"
+alwaysApply: false
+---
+
+# Models / Database Change Policy
+
+**When to apply:**
+- Modifying `models.py` or database schemas
+- Creating Alembic migrations (also see: `41-alembic-migrations.mdc`)
+- Changing API contracts that affect database
+- Adding/removing fields from models
+
+**Note:** For Alembic-specific migration rules (one per PR, single head, etc.), see `41-alembic-migrations.mdc`
+
+---
+
+## On Model/DB Updates: Sync Everything
+
+When you change a model or database schema, you MUST update:
+
+### ✅ Required Updates Checklist
+
+- [ ] **CRUD APIs** - Update create/read/update/delete endpoints
+- [ ] **OpenAPI Spec** - Regenerate schema documentation
+- [ ] **Client SDKs** - Regenerate frontend API client
+- [ ] **Migrations** - Create Alembic migration
+- [ ] **Backfills** - Script to populate existing data (if needed)
+- [ ] **Tests** - Update model tests, API tests
+- [ ] **Docs/ADR** - Document why the change was made
+
+---
+
+## Validate Upstream and Downstream
+
+### Upstream (Services That Write)
+
+Check all services/orchestrators that create or update this model:
+
+```python
+# Example: If you add a field to User model
+class User(Base):
+    email: str
+    name: str
+    phone: str  # ← NEW FIELD
+
+# Must update:
+# 1. User creation service
+async def create_user(email: str, name: str, phone: str):  # Add phone
+    return User(email=email, name=name, phone=phone)
+
+# 2. User update service
+async def update_user(user_id: str, data: UpdateUserRequest):
+    # UpdateUserRequest must include phone field
+    pass
+```
+
+### Downstream (Services That Read)
+
+Check all services/jobs/reports that read this model:
+
+- Background jobs
+- Data exports
+- Analytics pipelines
+- Admin dashboards
+- Third-party integrations
+
+---
+
+## Breaking Changes: Version, Deprecate, Flag
+
+### ✅ For Breaking Changes
+
+```python
+# Example: Renaming field
+
+# STEP 1: Add new field, keep old (v1)
+class User(Base):
+    email: str  # Old field - DEPRECATED
+    email_address: str  # New field
+
+# STEP 2: Backfill old → new
+async def backfill_email_addresses():
+    users = await db.fetch_all("SELECT * FROM users WHERE email_address IS NULL")
+    for user in users:
+        await db.execute(
+            "UPDATE users SET email_address = ? WHERE id = ?",
+            user.email, user.id
+        )
+
+# STEP 3: Update code to use new field
+# Update all services to read from email_address
+
+# STEP 4: Deprecate old field (mark in OpenAPI spec)
+class User(BaseModel):
+    email: str = Field(deprecated=True)
+    email_address: str
+
+# STEP 5: Remove old field (after transition period)
+# - Drop column in migration
+# - Remove deprecated field from models
+```
+
+### Rollout Plan
+
+Document rollout/rollback procedure:
+
+```markdown
+## Rollout Plan
+
+1. Deploy migration (adds email_address column, both columns exist)
+2. Run backfill script (populate email_address from email)
+3. Deploy updated code (reads from email_address, writes to both)
+4. Monitor for errors (48 hours)
+5. After stable, deploy code that writes only to email_address
+6. Monitor for 1 week
+7. Drop old email column in final migration
+
+## Rollback Plan
+
+1. Revert to code that uses old email field
+2. (Both columns exist during transition, so no data loss)
+3. Can rollback at any step before dropping old column
+```
+
+---
+
+## Migration Best Practices
+
+### ✅ DO: Safe Migrations
+
+```python
+# ✅ Alembic migration example
+"""Add phone field to users
+
+Revision ID: abc123
+Revises: xyz789
+"""
+
+def upgrade():
+    # Add column with default (safe for existing rows)
+    op.add_column(
+        'users',
+        sa.Column('phone', sa.String(20), nullable=True, default=None)
+    )
+    
+    # Add index if needed (for queries)
+    op.create_index('ix_users_phone', 'users', ['phone'])
+
+def downgrade():
+    # Rollback support
+    op.drop_index('ix_users_phone', 'users')
+    op.drop_column('users', 'phone')
+```
+
+### ✅ DO: Test Migrations
+
+```python
+# ✅ Test migration up and down
+@pytest.mark.asyncio
+async def test_migration_abc123():
+    # Test upgrade
+    alembic.upgrade("abc123")
+    
+    # Verify column exists
+    result = await db.fetch_one("SELECT phone FROM users LIMIT 1")
+    assert "phone" in result
+    
+    # Test downgrade
+    alembic.downgrade("xyz789")
+    
+    # Verify column removed
+    with pytest.raises(Exception):  # Column should not exist
+        await db.fetch_one("SELECT phone FROM users LIMIT 1")
+```
+
+---
+
+## Update Tests
+
+### ✅ DO: Update All Related Tests
+
+```python
+# ✅ When adding phone field to User
+def test_create_user_with_phone():
+    user = create_user(
+        email="test@example.com",
+        name="Test User",
+        phone="+1234567890"  # NEW
+    )
+    assert user.phone == "+1234567890"
+
+def test_user_api_response_includes_phone():
+    response = client.get("/api/users/123")
+    assert "phone" in response.json()
+```
+
+---
+
+## Update OpenAPI Spec
+
+```bash
+# After model changes, regenerate OpenAPI spec
+cd scripts
+./generate-open-api-for-fe.sh
+
+# Regenerate frontend API client
+cd ..
+npm run generate:frontend
+```
+
+---
+
+## Update Indices and Permissions
+
+### ✅ Add Indices for New Query Patterns
+
+```python
+# If adding phone lookup capability
+def upgrade():
+    # Add phone field
+    op.add_column('users', sa.Column('phone', sa.String(20)))
+    
+    # Add index for phone lookups
+    op.create_index('ix_users_phone', 'users', ['phone'], unique=True)
+```
+
+### ✅ Update Row-Level Security (RLS)
+
+```sql
+-- If using Postgres RLS, update policies
+ALTER POLICY user_access ON users
+  USING (user_id = current_user_id() OR is_admin());
+```
+
+---
+
+## Documentation
+
+### ✅ Create ADR (Architecture Decision Record)
+
+```markdown
+# ADR: Add Phone Field to User Model
+
+## Context
+Users need to verify their identity via SMS.
+
+## Decision
+Add `phone` field to User model.
+
+## Consequences
+- Positive: Enables 2FA via SMS
+- Negative: Requires backfill of existing users
+- Migration: See migration abc123
+- Rollout: Gradual deployment with dual-write period, monitor over 1 week
+
+## Alternatives Considered
+- External phone verification service (rejected: too expensive)
+```
+
+---
+
+## Breaking Change Checklist
+
+When making breaking changes:
+
+- [ ] **Version the API** (e.g., `/v1/users` → `/v2/users`)
+- [ ] **Deprecate old version** (set deprecation date)
+- [ ] **Dual-write period** (write to both old and new, read from new)
+- [ ] **Document rollout plan** (step-by-step deployment)
+- [ ] **Document rollback plan** (how to undo safely)
+- [ ] **Notify consumers** (internal teams, external users)
+- [ ] **Backfill data** (script + verification)
+- [ ] **Update SDKs** (regenerate clients)
+- [ ] **Monitor metrics** (errors, latency, usage)
+
+---
+
+## Common Scenarios
+
+### Adding a Required Field
+
+```python
+# WRONG: Breaks existing data
+class User(Base):
+    phone: str  # Required! But existing users don't have it!
+
+# RIGHT: Make optional first, then backfill
+class User(Base):
+    phone: Optional[str] = None  # Nullable
+
+# After backfill complete, make required
+class User(Base):
+    phone: str  # Now safe (all users have phone)
+```
+
+### Renaming a Field
+
+```python
+# Use the versioning approach (steps 1-5 above)
+# NEVER just rename - will break all consumers!
+```
+
+### Removing a Field
+
+```python
+# 1. Mark deprecated in OpenAPI
+# 2. Remove from code (but keep column)
+# 3. After 1 month, drop column in migration
+```
+
+---
+
+**Remember:** Database changes affect everyone! Be careful! 🗄️

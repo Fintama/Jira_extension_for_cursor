@@ -1,0 +1,128 @@
+---
+description: When creating new agents, services, or LLM nodes
+alwaysApply: false
+---
+
+# Agent & Service Architecture
+
+**Before creating new agents, services, or LLM-powered nodes:**
+
+## 1. Architecture Decision
+
+Refer to **AGENTS.md** for the decision tree:
+
+### Create an AGENT if:
+- ✅ Multi-step workflow with planning/iteration
+- ✅ Needs state management across steps
+- ✅ Complex decision-making (conditional routing)
+- ✅ Example: "Plan research → Execute search → Evaluate results → Iterate"
+
+### Create a SERVICE if:
+- ✅ Single-purpose utility
+- ✅ Stateless operation
+- ✅ Example: "Extract entities from text"
+
+**Location:**
+- Agents: `backend/app/api/services/agents/{agent_name}/`
+- Services: `backend/app/api/services/{service_name}.py`
+
+## 2. Implementation Guides
+
+### For Agents:
+- **Step-by-step:** `docs/guides/agent_guides/agent_creation_guide.md`
+- **Structure:**
+  ```
+  {agent_name}/
+  ├── {agent_name}.py              # Main agent class
+  ├── agent_state.py               # State definition
+  └── nodes/
+      ├── {node_name}_node.py
+      └── {node_name}_helpers/     # If node uses LLM
+          ├── prompt_builder.py
+          └── prompts/
+              └── {variant}.md
+  ```
+
+### For LLM Prompts:
+- **Detailed guide:** `docs/guides/agent_guides/prompt_writing_guide.md`
+- **Gold standard:** `backend/app/api/services/prompts/unified_extraction.md`
+
+## 3. Prompt Asset Pattern
+
+**ALWAYS use this pattern when a node calls an LLM:**
+
+### File Structure:
+```
+{node_name}_helpers/
+├── prompts/                     # Markdown templates
+│   ├── core.md                  # Core identity (if applicable)
+│   └── {variant}.md             # Task-specific (simple, complex, voice, etc.)
+└── prompt_builder.py            # Loads .md, injects {{PLACEHOLDERS}}
+```
+
+### Template Structure:
+```markdown
+[ROLE]
+You are a [JOB_TITLE] for [PURPOSE].
+
+[TASK 1: TASK_NAME]
+CONCEPTS & PRINCIPLES:
+CHAIN-OF-THOUGHT ALGORITHM:
+EXAMPLES:
+RULES SUMMARY:
+
+[OUTPUT SCHEMA]
+```
+
+**Key Philosophy:** Write prompts as if onboarding a smart new joiner fresh from school.
+
+## 4. Documentation
+
+### During Development:
+- Create `docs/specs/spec_{feature}_v1.md`
+- Create `docs/plans/plan_{feature}_v1.md`
+
+### After PR Merge:
+- Move specs/plans to `docs/archive/`
+- Create `docs/guides/{feature}_guide.md`
+
+## 5. Required Files
+
+**For New Agents:**
+- [ ] `{agent_name}.py` - Implements DomainAgentInterface
+- [ ] `agent_state.py` - TypedDict state definition
+- [ ] `nodes/{node}_node.py` - Node functions
+- [ ] `nodes/{node}_helpers/prompt_builder.py` - If uses LLM
+- [ ] `nodes/{node}_helpers/prompts/{variant}.md` - Prompt templates
+- [ ] `backend/tests/api/test_{agent_name}.py` - Tests
+- [ ] Registration in `domain_agent_registry.py`
+
+**For New Services:**
+- [ ] `{service_name}_service.py` - Service implementation
+- [ ] `backend/tests/api/test_{service_name}.py` - Tests
+
+## 6. Key References
+
+- **AGENTS.md** - Project structure and quick decision tree
+- **docs/guides/agent_guides/agent_creation_guide.md** - Complete walkthrough
+- **docs/guides/agent_guides/prompt_writing_guide.md** - Prompt writing best practices
+- **docs/Documentation/prompt_asset_management_pattern.md** - Pattern details
+
+## 7. Examples to Study
+
+### Simple Agent:
+- `backend/app/api/services/agents/wealth_agent/` - Linear workflow
+
+### Complex Agent:
+- `backend/app/api/services/agents/research_agent/` - Iterative refinement, tool calling
+
+### Gold Standard Prompt:
+- `backend/app/api/services/prompts/unified_extraction.md` - Perfect structure
+
+### Prompt Pattern Examples:
+- `backend/app/api/services/agents/global_supervisor/nodes/ui_node_helpers/`
+- `backend/app/api/services/agents/global_supervisor/nodes/intent_classification_helpers/`
+
+---
+
+**Remember:** Agents use LangGraph, services are stateless, prompts in `.md` files! 🚀

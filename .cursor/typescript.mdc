@@ -1,0 +1,87 @@
+---
+globs: *.ts,*.tsx
+---
+
+# TypeScript Best Practices
+
+## General
+
+- **Prefer** `Interface` declaration over `Type`
+- **Type** is used only for simple primitives and objects
+
+## Global Type Definitions: `shared.d.ts`
+
+The `shared.d.ts` file in the frontend root is used for:
+
+- **Simple primitive type aliases**: Common domain types that wrap primitives and are used throughout the application (e.g., `ChatId`, `MessageId`, `ChatPageKey`)
+- **Global type definitions**: Types that need to be globally accessible without imports
+- **Browser API augmentations**: Type declarations for browser APIs that may not be fully typed in TypeScript (e.g., `SpeechRecognition`)
+
+### When to use `shared.d.ts`:
+
+- For simple type aliases representing domain concepts that are strings, numbers, or other primitives
+- For types that are used so frequently that importing them everywhere would be cumbersome
+- For augmenting global browser APIs or third-party libraries without type definitions
+
+### When NOT to use `shared.d.ts`:
+
+- For complex types, interfaces, or types with many properties (use domain-specific type files instead)
+- For types that are only used within a specific feature or domain (keep them local to that feature)
+- For types that would benefit from being co-located with their implementation
+
+## File Names - ALWAYS use kebab-case
+
+All TypeScript and TypeScript React files **MUST** use **kebab-case** naming.
+
+### ✅ Correct Examples
+
+- `message-bubble.tsx` - Component files
+- `use-current-time.ts` - Custom hook files
+- `message-actions.tsx` - Component with multiple words
+- `api-client.ts` - Utility files
+- `user-profile-settings.tsx` - Component with many words
+- `format-date.ts` - Utility function files
+
+### ❌ Incorrect Examples
+
+- `MessageBubble.tsx` - PascalCase (wrong)
+- `useMyHook.ts` - camelCase (wrong)
+- `image_preview.tsx` - snake_case (wrong)
+- `UserProfileSettings.tsx` - PascalCase (wrong)
+- `APIClient.ts` - Mixed case (wrong)
+
+## TypeScript Types Naming
+
+### Component Props
+
+- Use **ComponentNameProps** pattern (PascalCase for the type itself)
+- ✅ `MessageBubbleProps`
+- ✅ `SidemenuChatListLinkProps`
+- ❌ `IMessageBubbleProps` (no I prefix)
+- ❌ `TMessageBubbleProps` (no T prefix)
+
+### Hook Types
+
+- Parameters: **Use + HookName + Props**
+- Return types: **Use + HookName + Return**
+- ✅ `UseCurrentTimeProps` and `UseCurrentTimeReturn`
+- ❌ `UseCurrentTimeResult` (use Return, not Result)
+- ❌ `IUseCurrentTimeProps` (no I prefix)
+
+### Utility Function Parameters
+
+- **Single argument**: Use directly, no options object
+- **Multiple arguments**: Use **Name + Options** pattern
+- ✅ `formatDate(date: Date)`
+- ✅ `formatDate(options: FormatDateOptions)`
+- ❌ `formatDate(props: FormatDateProps)` (use options)
+- ❌ `formatDate(params: FormatDateParams)` (use options)
+
+## Important Notes
+
+1. **File names** are in kebab-case
+2. **Component names** (inside the file) are in PascalCase
+3. **Type names** are in PascalCase
+4. **Variable and function names** are in camelCase
+
+For more detailed frontend-specific conventions, see @naming-convention.md

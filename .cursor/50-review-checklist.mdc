@@ -1,0 +1,301 @@
+---
+description: File review checklist - use before creating PR or when reviewing code
+alwaysApply: false
+---
+
+# Review Checklist
+
+**When to use:**
+- Before creating a Pull Request
+- When reviewing someone else's code
+- During self-review after implementation
+- Before marking a feature as complete
+
+**Skip for:** Trivial changes (typos, formatting)
+
+---
+
+## For Every File Changed
+
+Go through this checklist for **each file** you've modified:
+
+---
+
+### 1. ✅ Spec Alignment
+
+**Question:** Does this code match the contract and acceptance criteria?
+
+**Check:**
+- [ ] Implements all requirements from `spec.md`
+- [ ] Matches API contract (request/response format)
+- [ ] Handles all edge cases mentioned in spec
+- [ ] No gold-plating (extra features not in spec)
+
+```python
+# ✅ Check against spec
+# spec.md says: "Return 404 if user not found"
+if not user:
+    raise HTTPException(status_code=404, detail="User not found")  # ✅ Matches spec
+
+# ❌ Spec says 404, but returning 400
+if not user:
+    raise HTTPException(status_code=400)  # ❌ Wrong status code
+```
+
+---
+
+### 2. ✅ Elegance
+
+**Question:** Can this be simplified?
+
+**Check:**
+- [ ] No unnecessary complexity
+- [ ] Clear, readable logic
+- [ ] Avoids clever tricks (readability > cleverness)
+- [ ] Appropriate abstraction level
+- [ ] DRY (Don't Repeat Yourself) - no duplicated logic
+
+```python
+# ❌ Over-complicated
+def is_valid_email(email):
+    if email:
+        if "@" in email:
+            if "." in email.split("@")[1]:
+                return True
+    return False
+
+# ✅ Simplified
+def is_valid_email(email: str) -> bool:
+    return email and "@" in email and "." in email.split("@")[-1]
+
+# ✅ Even better: Use existing library
+from email_validator import validate_email
+
+def is_valid_email(email: str) -> bool:
+    try:
+        validate_email(email)
+        return True
+    except EmailNotValidError:
+        return False
+```
+
+---
+
+### 3. ✅ Robustness
+
+**Question:** Is this code defensive and error-resistant?
+
+**Check:**
+- [ ] **Input validation** - validates all inputs
+- [ ] **Typed errors** - uses specific exception types
+- [ ] **Deterministic defaults** - predictable fallback values
+- [ ] **No catch-all** - doesn't swallow all exceptions
+- [ ] **Graceful degradation** - handles failures well
+
+```python
+# ❌ Not robust
+def process_order(data):
+    return save_to_db(data)  # No validation!
+
+# ✅ Robust
+def process_order(data: OrderRequest) -> Order:
+    # Validate input
+    if not data.items:
+        raise ValueError("Order must have at least one item")
+    
+    # Validate business rules
+    if data.total < 0:
+        raise ValueError("Order total cannot be negative")
+    
+    # Save with error handling
+    try:
+        return save_to_db(data)
+    except DatabaseError as e:
+        logger.error(f"Failed to save order: {e}", extra={"order_id": data.id})
+        raise OrderProcessingError(f"Failed to process order: {e}") from e
+```
+
+---
+
+### 4. ✅ Performance
+
+**Question:** Is this code performant and scalable?
+
+**Check:**
+- [ ] **Batching** - groups operations where possible
+- [ ] **Timeouts** - all I/O has timeout limits
+- [ ] **Concurrency-safe** - thread/async safe
+- [ ] **No N+1 queries** - batches database queries
+- [ ] **Caching** - caches stable data with TTL
+- [ ] **Non-blocking** - uses async I/O where appropriate
+
+```python
+# ❌ N+1 query problem
+async def get_orders_with_users():
+    orders = await db.fetch_all("SELECT * FROM orders")
+    for order in orders:  # N queries!
+        order.user = await db.fetch_one("SELECT * FROM users WHERE id = ?", order.user_id)
+    return orders
+
+# ✅ Batched query
+async def get_orders_with_users():
+    orders = await db.fetch_all("SELECT * FROM orders")
+    user_ids = [o.user_id for o in orders]
+    
+    # Single query for all users
+    users = await db.fetch_all("SELECT * FROM users WHERE id = ANY(?)", user_ids)
+    users_by_id = {u.id: u for u in users}
+    
+    for order in orders:
+        order.user = users_by_id.get(order.user_id)
+    
+    return orders
+```
+
+---
+
+### 5. ✅ Cleanliness
+
+**Question:** Is the code clean and maintainable?
+
+**Check:**
+- [ ] **No dead code** - removed unused functions/imports
+- [ ] **Clear naming** - variables/functions named by intent
+- [ ] **Lint passes** - `black`, `ruff`, `eslint`, `prettier`
+- [ ] **Type check passes** - `mypy`, `pyright`, `tsc`
+- [ ] **Comments explain why** - not what
+- [ ] **No debug statements** - removed `print`, `console.log`
+
+```python
+# ❌ Unclear naming
+def f(x, y):
+    return x + y
+
+# ✅ Clear naming
+def calculate_order_total(subtotal: Decimal, tax: Decimal) -> Decimal:
+    return subtotal + tax
+```
+
+---
+
+### 6. ✅ Business Sanity
+
+**Question:** Does this add tangible value? Is it over-engineered?
+
+**Check:**
+- [ ] Solves a real business problem
+- [ ] Appropriate for the scale (not over-engineered)
+- [ ] Maintainable by the team
+- [ ] Worth the complexity it adds
+
+```python
+# ❌ Over-engineered for simple use case
+class OrderProcessorFactory:
+    def create_processor(self, order_type):
+        if order_type == "simple":
+            return SimpleOrderProcessor()
+        # ... 5 more processors
+
+# ✅ Simple and sufficient
+def process_order(order: Order) -> ProcessedOrder:
+    validate(order)
+    calculate_total(order)
+    return save(order)
+```
+
+---
+
+### 7. ✅ Anti-Brittle
+
+**Question:** Is this code resilient to change? No brittle heuristics?
+
+**Check:**
+- [ ] **No regex hacks** - doesn't parse with fragile regex
+- [ ] **No keyword matching** - doesn't rely on exact keywords
+- [ ] **No locale assumptions** - works across locales
+- [ ] **Configuration-driven** - uses config, not hardcoded values
+- [ ] **Schema-validated** - uses Pydantic/schemas, not dicts
+
+```python
+# ❌ Brittle keyword matching
+def is_greeting(message: str) -> bool:
+    return message.lower() in ["hello", "hi", "hey"]  # Breaks for "Hi there!"
+
+# ✅ Better: Use NLP or ask LLM
+async def is_greeting(message: str) -> bool:
+    result = await classify_intent(message)
+    return result.intent == "greeting"
+
+# ❌ Brittle regex for email
+def extract_email(text: str) -> str:
+    match = re.search(r'\S+@\S+', text)  # Too simple!
+    return match.group() if match else None
+
+# ✅ Proper validation
+from email_validator import validate_email
+
+def extract_email(text: str) -> Optional[str]:
+    try:
+        valid = validate_email(text)
+        return valid.email
+    except EmailNotValidError:
+        return None
+```
+
+---
+
+## Quick Checklist
+
+Copy this into your PR description or review notes:
+
+```markdown
+## File Review Checklist
+
+For each file changed:
+
+- [ ] **Spec Alignment** - Matches contract & acceptance criteria
+- [ ] **Elegance** - Simplified wherever possible
+- [ ] **Robustness** - Input validation, typed errors, graceful errors
+- [ ] **Performance** - Batching, timeouts, concurrency-safe, no N+1
+- [ ] **Cleanliness** - No dead code, clear naming, lint/typecheck passes
+- [ ] **Business Sanity** - Adds value, not over-engineered
+- [ ] **Anti-Brittle** - No regex/keyword hacks, config-driven
+```
+
+---
+
+## Common Issues to Look For
+
+### In Python Code
+
+- [ ] Type hints on all functions
+- [ ] `mypy` passes without errors
+- [ ] No bare `except:` clauses
+- [ ] Async functions use `await` properly
+- [ ] No hardcoded secrets or config values
+
+### In TypeScript Code
+
+- [ ] `tsc --noEmit` passes
+- [ ] No `any` types (use proper types)
+- [ ] React hooks follow rules
+- [ ] No `console.log` statements
+- [ ] Proper error boundaries
+
+### In API Changes
+
+- [ ] OpenAPI spec regenerated
+- [ ] Breaking changes are versioned
+- [ ] Backward compatibility maintained
+- [ ] Frontend client regenerated
+
+### In Database Changes
+
+- [ ] Migration created
+- [ ] Migration tested (up and down)
+- [ ] Indices added for new queries
+- [ ] RLS policies updated (if applicable)
+
+---
+
+**Remember:** Review catches bugs before production! 👀

@@ -1,0 +1,160 @@
+---
+description: Development workflow - apply for features, refactoring, new agents/services, or multi-file changes
+alwaysApply: false
+---
+
+⚠️ **MANDATORY WORKFLOW - Follow this sequence for every non-trivial change.**
+
+**Do not proceed** to next gate until current gate is satisfied.
+
+**Skip only for:** Documentation updates, typo fixes, simple one-line changes.
+
+---
+
+## 🌿 Step 0: Branch Strategy
+
+**ASK USER FIRST:** "Should we create a new branch for this work?"
+
+**If yes, use naming convention:**
+```bash
+feature/{name}     # New features
+fix/{name}         # Bug fixes
+refactor/{name}    # Code improvements
+docs/{name}        # Documentation
+test/{name}        # Test additions
+```
+
+**Examples:** `feature/ambiguous-entity-skip`, `fix/orphan-facts-cleanup`
+
+**Wait for user confirmation before creating branch!**
+
+---
+
+## 📋 Step 1: CREATE TODO LIST
+
+**After branch confirmed, create a Cursor TODO list** with all workflow phases:
+
+```
+TODO List (based on plan.md):
+[ ] 0. Branch Strategy - Confirmed branch: {branch_name}
+[ ] 1. Architecture & Documentation Check
+    - Review AGENTS.md
+    - Check specs/plans in docs/
+    - Create/update plan if needed
+
+[ ] 2. Detailed Planning
+    - Break down into steps from plan.md
+    - Get approval
+
+[ ] 3. TDD (Red)
+    - Write tests with real infrastructure
+    - Mark CI tests
+    - Update Docker container
+    - Execute tests in Docker (-vv)
+    - Verify tests FAIL
+
+[ ] 4. Implement (Green)
+    - Write minimal code
+    - Update Docker container
+    - Execute tests in Docker (-vv)
+    - Verify tests PASS
+
+[ ] 5. Refactor
+    - Apply code quality rules
+    - Update Docker container
+    - Execute tests in Docker (-vv)
+    - Verify tests still PASS
+
+[ ] 6. File Critique
+    - Review each file (7-point checklist)
+
+[ ] 7. Definition of Done
+    - Docs updated, tests green, consumers verified
+```
+
+**Implementation details:** Found in `docs/plans/plan_{feature}_v{version}.md`
+
+**Update TODO as you complete each step!**
+
+---
+
+**0. Architecture & Documentation Check**
+
+**Architecture:**
+- Review **AGENTS.md** for project structure and architecture patterns
+- If creating an agent or service, use the decision tree in AGENTS.md
+- For agents: Follow `docs/guides/agent_guides/agent_creation_guide.md`
+- For LLM prompts: Follow `docs/guides/agent_guides/prompt_writing_guide.md`
+- Always use prompt asset pattern: `.md` files + `prompt_builder.py`
+
+**Spec/Plan Discovery:**
+- Look in `docs/specs/` for active feature specifications
+- Look in `docs/plans/` for active implementation plans
+- If missing/incomplete, create:
+  - `docs/specs/spec_{feature}_v1.md` - What to build (acceptance criteria, user stories)
+  - `docs/plans/plan_{feature}_v1.md` - How to build (technical approach, file changes)
+- Review existing specs/plans critically - update if needed
+
+**1. Detailed planning (next increment)**
+- Produce a short, concrete step-plan for the next increment; **ask for approval** before implementation.
+
+**2. TDD (red) - ⚡ MUST EXECUTE TESTS (when applicable)!**
+
+**⚠️ WHEN TO USE TDD:**
+
+TDD is **MANDATORY** for:
+- ✅ Business logic (services, agents, data transformations)
+- ✅ API endpoints with complex behavior
+- ✅ Edge cases and error handling
+- ✅ State management and workflows
+
+TDD is **OPTIONAL/SKIP** for:
+- ❌ Infrastructure setup (Docker Compose, env vars)
+- ❌ Configuration files (YAML, JSON)
+- ❌ Shell scripts (verify manually instead)
+- ❌ Simple CRUD with no business logic
+
+**Use pragmatic judgment: If manual verification is faster and equally reliable, skip TDD.**
+
+---
+
+**MANDATORY SEQUENCE (when using TDD):**
+1. Write comprehensive business-relevant tests using **real infrastructure** (DB, LLM, APIs)
+2. Mark 1-2 critical tests for CI (`@pytest.mark.ci_critical`)
+3. Skip expensive LLM tests in CI (`@pytest.mark.skipif(os.getenv("CI") == "true")`)
+4. 🔄 **UPDATE container:** `docker compose cp backend/app/. backend:/code/app/` and `docker compose cp backend/tests/. backend:/code/tests/`
+5. ⚡ **EXECUTE in Docker:** `docker compose exec backend pytest <test_file> -vv`
+6. 👁️ **WATCH** terminal output - see test progress in real-time
+7. ✅ **VERIFY:** Tests FAIL (red) - check terminal for FAILED status
+
+Mock ONLY when: cost prohibitive, unstable, or rate-limited.
+See `00-workflow.mdc` for detailed test strategy and Docker commands.
+
+**❌ Do NOT proceed to Step 3 until tests are executed in Docker and verified failing (if using TDD)!**
+
+**3. Implement (green) - ⚡ MUST EXECUTE TESTS!**
+
+**MANDATORY SEQUENCE:**
+1. Implement minimal code to pass tests (follow implementation-*.mdc rules)
+2. 🔄 **UPDATE container:** `docker compose cp backend/app/. backend:/code/app/`
+3. ⚡ **EXECUTE in Docker:** `docker compose exec backend pytest <test_file> -vv`
+4. 👁️ **WATCH** terminal output - see test results in real-time
+5. ✅ **VERIFY:** Tests PASS (green) - check terminal for PASSED status
+
+**❌ Do NOT proceed to Step 4 until tests are executed in Docker and verified passing!**
+
+**4. Refactor & Hard Rules - ⚡ MUST EXECUTE TESTS!**
+
+**MANDATORY SEQUENCE:**
+1. Apply Implementation Discipline: control flow ≤ 3 nesting levels, guard clauses, async I/O, timeouts, idempotent retries, batching, bounded concurrency, no N+1, cache stable metadata (TTL). **Never hardcode values.**
+2. 🔄 **UPDATE container:** `docker compose cp backend/app/. backend:/code/app/`
+3. ⚡ **EXECUTE in Docker:** `docker compose exec backend pytest <test_file> -vv`
+4. 👁️ **WATCH** terminal output - ensure tests still passing
+5. ✅ **VERIFY:** Tests STILL PASS (refactoring must not break tests)
+
+**5. File Critique (for each touched file)**
+- Check: Spec alignment; Elegance; Robustness (input validation, typed errors, deterministic defaults, no catch-all); Performance (timeouts, batching, bounded concurrency, non-blocking event loop); Cleanliness (dead code, naming, lint/typecheck); Business sanity; Anti-brittle (no regex/keyword/locale hacks).
+
+**6. Definition of Done**
+- `spec.md` & `plan.md` reflect reality; tests green in CI (only critical tests); comprehensive tests pass locally; telemetry in place; SDK/OpenAPI updated (if applicable); consumers verified; **no brittle heuristics** introduced. See `60-definition-of-done.mdc` for full checklist.
+

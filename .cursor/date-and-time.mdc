@@ -1,0 +1,5 @@
+---
+globs: *.ts,*.tsx
+---
+
+- Utilize 'date-fns' as much as possible

@@ -1,0 +1,86 @@
+# Project Context: Jira MCP for Cursor
+
+## Project Overview
+
+This is **Jira MCP for Cursor** - a Model Context Protocol (MCP) server that provides seamless Jira integration for Cursor IDE.
+
+**NOT SwisperStudio** - This is a separate project from SwisperStudio.
+
+## Technology Stack
+
+- **Language:** Python 3.11+
+- **Framework:** MCP SDK (`mcp` package)
+- **HTTP Client:** httpx (async)
+- **Configuration:** pydantic-settings
+- **CLI:** Click
+- **Security:** cryptography (for encrypted config storage)
+- **Testing:** pytest, pytest-asyncio
+- **Code Quality:** Black, Ruff, mypy
+
+## Project Structure
+
+```
+jira-mcp-cursor/
+├── src/jira_mcp_cursor/
+│   ├── server/          # MCP server implementation
+│   ├── config/          # Configuration wizard & encrypted storage
+│   ├── tools/           # MCP tools (list_tickets, get_ticket, etc.)
+│   └── utils/           # Helper utilities (JQL builder, parsers)
+├── tests/               # Test suite
+├── docs/                # Comprehensive documentation (8 docs)
+└── pyproject.toml       # Python package configuration
+```
+
+## Key Features
+
+1. **MCP Server** - Expose Jira operations as MCP tools
+2. **Setup Wizard** - Web-based configuration UI (one-time setup)
+3. **Secure Storage** - Encrypted credential storage
+4. **Auto-installer** - Automatically updates Cursor MCP settings
+5. **7 Core Tools:**
+   - list_my_tickets
+   - get_ticket
+   - get_highest_priority_ticket
+   - analyze_ticket
+   - update_ticket_status
+   - update_ticket_description
+   - add_ticket_comment
+
+## Documentation
+
+All design docs are in `docs/`:
+- Start with: `docs/JIRA_MCP_INDEX.md`
+- Implementation guide: `docs/examples/jira-mcp-server-implementation-example.md`
+- Quick reference: `docs/reference/jira-mcp-server-quick-reference.md`
+
+## Development Priorities
+
+1. **Python-only** - No frontend, no React, no MUI
+2. **Async first** - Use async/await throughout
+3. **Security** - Credentials must be encrypted
+4. **User Experience** - Simple setup, works forever
+5. **Production-ready** - Error handling, logging, testing
+
+## What to Ignore from SwisperStudio Rules
+
+Since this is Python-only, ignore:
+- Frontend rules (React, MUI, animations, forms, styling)
+- TypeScript rules
+- Component rules
+- Translation rules
+
+## What's Still Relevant
+
+Keep these from SwisperStudio:
+- Workflow rules
+- Implementation style/patterns
+- Code quality standards
+- Testing patterns
+- Documentation standards
+- Review checklists
+
+## Current Phase
+
+**Setup Phase** - Project structure created, ready for core implementation.
+
+Next steps: Implement Jira API client and core MCP tools.

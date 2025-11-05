@@ -1,0 +1,307 @@
+---
+description: Definition of Done - use before marking feature complete or merging PR
+alwaysApply: false
+---
+
+# Definition of Done (DoD)
+
+**When to use:**
+- Before creating a Pull Request
+- Before marking a feature as "Done" in Jira/Linear
+- Before merging to main/production
+- When completing a sprint/iteration
+
+**Purpose:** Ensure features are production-ready, not just "code complete."
+
+---
+
+## Checklist: Feature is DONE When...
+
+---
+
+### 1. ✅ Documentation Updated
+
+- [ ] **Spec updated** - `docs/specs/spec_{feature}_v{version}.md` reflects reality
+- [ ] **Plan updated** - `docs/plans/plan_{feature}_v{version}.md` matches implementation
+- [ ] **PR references both** - Links to spec and plan in PR description
+- [ ] **ADR created** (if architectural decision) - Documents why
+- [ ] **API docs updated** - OpenAPI spec regenerated
+
+```markdown
+## PR Description Template
+
+### Context
+What problem does this solve?
+
+### Solution
+How did we solve it?
+
+### Documentation
+- Spec: `docs/specs/spec_user_phone_v1.md`
+- Plan: `docs/plans/plan_user_phone_v1.md`
+- ADR: `docs/Documentation/adr_phone_verification.md` (if applicable)
+
+### Testing
+- Unit tests: ✅
+- Integration tests: ✅
+- Performance tests: ✅
+```
+
+---
+
+### 2. ✅ All Tests Pass
+
+- [ ] **Unit tests green** - All unit tests pass locally and in CI
+- [ ] **Integration tests green** - E2E scenarios work
+- [ ] **Golden path tests** - Happy path works end-to-end
+- [ ] **Error path tests** - Error cases handled gracefully
+- [ ] **Performance smoke tests** - No regressions in latency/throughput
+
+```bash
+# Run full test suite
+poetry run pytest backend/tests/
+
+# Check CI status
+# All checks must be green before merge!
+```
+
+---
+
+### 3. ✅ Telemetry Instrumented
+
+- [ ] **Metrics added** - Key operations emit metrics
+- [ ] **Logging added** - Important events are logged
+- [ ] **Error tracking** - Errors include correlation IDs
+- [ ] **Dashboards updated** - Grafana/monitoring shows new metrics
+
+```python
+# ✅ Instrumented
+from app.core.metrics import metrics
+import logging
+
+logger = logging.getLogger(__name__)
+
+async def process_payment(order: Order) -> PaymentResult:
+    # Emit metric
+    metrics.increment("payment.attempts", tags={"method": order.payment_method})
+    
+    start_time = time.time()
+    
+    try:
+        result = await charge_payment(order)
+        
+        # Success metric
+        metrics.increment("payment.success")
+        metrics.timing("payment.duration_ms", (time.time() - start_time) * 1000)
+        
+        # Log important event
+        logger.info(
+            "Payment processed",
+            extra={
+                "order_id": order.id,
+                "amount": float(order.total),
+                "correlation_id": correlation_id
+            }
+        )
+        
+        return result
+        
+    except PaymentError as e:
+        # Error metric
+        metrics.increment("payment.failures", tags={"reason": e.reason})
+        
+        # Log error with context
+        logger.error(
+            "Payment failed",
+            extra={
+                "order_id": order.id,
+                "error": str(e),
+                "correlation_id": correlation_id
+            }
+        )
+        raise
+```
+
+---
+
+### 4. ✅ SDK/OpenAPI Updated
+
+- [ ] **OpenAPI spec regenerated** - Reflects API changes
+- [ ] **Frontend client regenerated** - `npm run generate:frontend`
+- [ ] **SDK version bumped** - If breaking changes
+- [ ] **Changelog updated** - Documents changes for consumers
+
+```bash
+# After API changes
+cd scripts
+./generate-open-api-for-fe.sh
+
+# Regenerate frontend client
+cd ..
+npm run generate:frontend
+
+# Verify OpenAPI diff
+./scripts/check-openapi-diff.sh
+```
+
+---
+
+### 5. ✅ Consumers Verified
+
+- [ ] **Upstream services updated** - Services that call this API
+- [ ] **Downstream services updated** - Services that depend on this data
+- [ ] **Breaking changes communicated** - Teams notified in advance
+- [ ] **Migration guide provided** - How to update (if breaking)
+
+```markdown
+## Consumer Verification
+
+### Upstream (who calls us)
+- [x] Frontend - updated to use new API
+- [x] Mobile app - backward compatible
+- [x] Background jobs - tested with new schema
+
+### Downstream (who we call)
+- [x] Payment service - handles new error codes
+- [x] Notification service - uses new event format
+
+### Breaking Changes
+- None (backward compatible)
+- OR: Migration guide provided in `docs/guides/migration_v2.md`
+```
+
+---
+
+### 6. ✅ No Brittle Heuristics
+
+- [ ] **No regex hacks** - Doesn't parse with fragile patterns
+- [ ] **No keyword matching** - Doesn't rely on exact words
+- [ ] **No hardcoded values** - Uses config/enums
+- [ ] **Schema-validated** - Uses Pydantic/types, not dicts
+- [ ] **Locale-agnostic** - Works across languages/regions
+
+```python
+# ❌ Brittle heuristic
+def is_urgent_email(subject: str) -> bool:
+    return "urgent" in subject.lower()  # Breaks for non-English!
+
+# ✅ Not brittle
+def is_urgent_email(email: Email) -> bool:
+    # Use priority header (standard)
+    return email.priority == EmailPriority.HIGH
+    
+    # OR ask LLM (robust)
+    result = await classify_urgency(email.subject)
+    return result.is_urgent
+```
+
+---
+
+### 7. ✅ Code Quality
+
+- [ ] **Linting passes** - `black`, `ruff`, `eslint`, `prettier`
+- [ ] **Type checking passes** - `mypy`, `pyright`, `tsc`
+- [ ] **No debug statements** - Removed `print`, `console.log`
+- [ ] **No commented code** - Deleted dead code
+- [ ] **Review checklist complete** - All 7 criteria met (see `50-review-checklist.mdc`)
+
+```bash
+# Python checks
+black .
+ruff check .
+mypy .
+
+# TypeScript checks
+npm run lint:frontend
+npm run format:frontend
+tsc --noEmit
+```
+
+---
+
+## PR Merge Checklist
+
+Before clicking "Merge":
+
+```markdown
+## Definition of Done
+
+- [ ] **Documentation**
+  - [ ] Spec updated
+  - [ ] Plan updated
+  - [ ] PR links to docs
+  - [ ] ADR created (if needed)
+
+- [ ] **Tests**
+  - [ ] Unit tests pass
+  - [ ] Integration tests pass
+  - [ ] Performance tests pass
+  - [ ] CI is green
+
+- [ ] **Telemetry**
+  - [ ] Metrics instrumented
+  - [ ] Logging added
+  - [ ] Correlation IDs included
+
+- [ ] **API/SDK**
+  - [ ] OpenAPI regenerated
+  - [ ] Frontend client regenerated
+  - [ ] Breaking changes communicated
+
+- [ ] **Consumers**
+  - [ ] Upstream verified
+  - [ ] Downstream verified
+  - [ ] Migration guide (if breaking)
+
+- [ ] **Quality**
+  - [ ] No brittle heuristics
+  - [ ] Linting passes
+  - [ ] Type checking passes
+  - [ ] Review checklist complete
+```
+
+---
+
+## Post-Merge Actions
+
+After merging to main:
+
+1. **Move docs to archive** (trigger: PR created)
+   ```bash
+   mv docs/specs/spec_{feature}_v1.md docs/archive/
+   mv docs/plans/plan_{feature}_v1.md docs/archive/
+   ```
+
+2. **Create guide** (if needed)
+   ```bash
+   # Create post-implementation guide
+   touch docs/guides/{feature}_guide.md
+   ```
+
+3. **Monitor deployment**
+   - Watch metrics dashboards
+   - Check error rates
+   - Review user feedback
+   - Verify functionality in production
+
+4. **Update team**
+   - Announce in Slack/Teams
+   - Update status in Jira/Linear
+   - Demo in next standup/review
+
+---
+
+## When NOT Done
+
+**Feature is NOT done if:**
+
+- ❌ Tests only pass on your machine ("works on my laptop")
+- ❌ No monitoring (can't tell if it's working)
+- ❌ Breaking changes without migration plan
+- ❌ Consumers not notified/updated
+- ❌ Documentation not updated
+- ❌ Uses brittle heuristics
+
+---
+
+**Remember:** Done = Production-ready! Ship with confidence! 🚀

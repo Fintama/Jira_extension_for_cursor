@@ -1,0 +1,119 @@
+---
+globs: *.ts,*.tsx
+---
+
+# 🎨 Icon Importing Rules
+
+## Preferred Icon Library
+
+Always prefer `@shiu/icons` over `@mui/icons-material` when importing icons.
+
+### Good Example
+
+```typescript
+import { EditIcon } from "@shiu/icons";
+```
+
+### Bad Example
+
+```typescript
+import EditOutlined from "@mui/icons-material/EditOutlined";
+```
+
+## Import Multiple Icons in a Single Statement
+
+When importing multiple icons from the same package, combine them into a single import statement.
+
+### Good Example
+
+```typescript
+import { DownloadIcon, CopyIcon, BookmarkIcon } from "@shiu/icons";
+```
+
+### Bad Example
+
+```typescript
+import { DownloadIcon } from "@shiu/icons";
+import { CopyIcon } from "@shiu/icons";
+import { BookmarkIcon } from "@shiu/icons";
+```
+
+## Why?
+
+- `@shiu/icons` provides a consistent, custom icon set for the project
+- Ensures visual consistency across the application
+- Centralized icon management and customization
+- Multiple imports from the same package reduces code readability and increases bundle size
+
+## Icon Sizes
+
+Icons from `@shiu/icons` support the `fontSize` prop to control their size. Available sizes follow Material-UI conventions:
+
+- `small` - 20px (most common for buttons and actions)
+- `medium` - 24px (default)
+- `large` - 35px
+- `inherit` - Inherits font size from parent
+
+### Good Example
+
+```typescript
+<DownloadIcon fontSize="small" />
+<BookmarkIcon fontSize="medium" />
+<EditIcon fontSize="large" />
+```
+
+## Usage Examples
+
+### In Icon Buttons
+
+```typescript
+import { DownloadIcon, CopyIcon, BookmarkIcon } from "@shiu/icons";
+import { MessageActionButton } from "@/features/message-actions/components";
+
+export function MessageActions() {
+  return (
+    <div>
+      <MessageActionButton tooltip="Download message" onClick={onDownload}>
+        <DownloadIcon fontSize="small" />
+      </MessageActionButton>
+
+      <MessageActionButton tooltip="Copy message" onClick={onCopy}>
+        <CopyIcon fontSize="small" />
+      </MessageActionButton>
+
+      <MessageActionButton tooltip="Bookmark" onClick={onBookmark}>
+        <BookmarkIcon fontSize="small" />
+      </MessageActionButton>
+    </div>
+  );
+}
+```
+
+### In Buttons
+
+```typescript
+import { NewChatIcon } from "@shiu/icons";
+import Button from "@mui/material/Button";
+
+export function NewChatButton() {
+  return <Button startIcon={<NewChatIcon />}>New Chat</Button>;
+}
+```
+
+### With Custom Styling
+
+```typescript
+import { EditIcon } from "@shiu/icons";
+
+export function CustomIcon() {
+  return (
+    <EditIcon
+      fontSize="small"
+      sx={{
+        color: "primary.main",
+        "&:hover": { opacity: 0.7 },
+      }}
+    />
+  );
+}
+```

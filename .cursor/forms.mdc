@@ -1,0 +1,131 @@
+---
+globs: *.ts,*.tsx
+---
+
+# 📋 Forms
+
+## Zod by default
+
+- use `zod/v4` for a schema definition
+- use `useForm` from `react-hook-form`
+- utilize `formState: FormState` as much as possible (e.g. disable submit button on isSubmitting)
+
+## Example
+
+```typescript
+import { z } from "zod/v4"; // ✅ Correct: import zod for a schema
+
+// ✅ Correct: use zod outside of the component
+export const formSchema = z.object({
+  shouldPostpone: z.boolean(), // ✅ Correct: custom form schema
+  message: z.string(), // ✅ Correct: custom form schema
+});
+
+// ✅ Correct: infer schema values
+type FormValues = z.infer<typeof formSchema>;
+
+// ✅ Correct: create initial values hook
+function useFormInitialValues() {
+  return useMemo(() => ({  // ✅ Correct: memoize the initial values return
+    shouldPostpone: false,
+    message: '',
+  }), []);
+}
+
+// ✅ Correct: create onSubmit handler hook
+function useFormSubmit() {
+  // ✅ Correct: memoize the the submit callback
+  return useCallback((data: ChangePasswordFormData) => {
+    // TODO: Implement password change API call
+    alert(JSON.stringify(data));
+  }, [])
+}
+
+...
+// Component render function
+const initialValues = useFormInitialValues();
+const onSubmit = useFormSubmit();
+
+const {
+  control,
+  handleSubmit,
+  reset,
+  formState: { errors },
+} = useForm<FormValues>({
+  resolver: zodResolver(formSchema), // ✅ Correct: create resolver for a schema
+  defaultValues: initialValues,
+});
+```
+
+### Using with JSX
+
+```typescript
+function CustomComponent() {
+  const { handleSubmit } = useForm<TFormValues>({
+    [...form config]
+  })
+
+  function onSubmit(data) { // ✅ Correct: create submit handler
+    console.log(data)
+  }
+
+  return (
+    <>
+      <Box component="form onSubmit={handleSubmit(onSubmit)}"> // ✅ Correct: always pass component="form" for a mui/components
+        [...fields]
+      </Box>
+      <form onSubmit={handleSubmit(onSubmit)}> //  ✅ Correct: `onSubmit` handler for a form
+        [...fields]
+      </form>
+    </>
+  )
+}
+```
+
+### Reinitialize on values changed (disabled by default)
+
+```typescript
+// ✅ Correct: add initialValues into dependency
+useEffect(() => {
+  reset(initialValues);
+}, [initialValues]);
+```
+
+### Submit on mount
+
+```typescript
+// ✅ Correct: subscribe for a whole form update with `watch` subscription
+useEffect(() => {
+  const unsubscribe = subscribe({
+    formState: {
+      values: true,
+    },
+    callback: () => {
+      formRef.current?.requestSubmit(); // ✅ Correct: Submit form via ref on values change
+    },
+  });
+
+  return () => unsubscribe();
+}, [subscribe, onSubmit]);
+
+...
+<form ref={formRef} ...
+```
+
+## Reset on successful submit
+
+```typescript
+const {
+  // ✅ Correct: get isSubmitSuccessful from the
+  formState: { errors, isSubmitSuccessful },
+} = useForm<FormValues>({
+  // ...form config
+});
+
+// ✅ Correct: reset form after successful submission
+useEffect(() => {
+  if (isSubmitSuccessful) {
+    reset();
+  }
+}, [isSubmitSuccessful, reset]);
+```
