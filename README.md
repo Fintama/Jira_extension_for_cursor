@@ -1,0 +1,1 @@
+# Jira_extension_for_cursor
