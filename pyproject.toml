@@ -1,12 +1,28 @@
 [project]
 name = "jira-mcp-cursor"
 version = "0.1.0"
-description = "Jira MCP server for Cursor IDE"
+description = "Seamless Jira integration for Cursor IDE via Model Context Protocol (MCP)"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
+keywords = ["jira", "cursor", "mcp", "model-context-protocol", "ai", "integration", "productivity"]
 authors = [
-    {name = "Your Name", email = "your-email@example.com"}
+    {name = "Jira MCP Contributors", email = "contributors@example.com"}
+]
+maintainers = [
+    {name = "Jira MCP Contributors", email = "contributors@example.com"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Software Development :: Bug Tracking",
+    "Topic :: Office/Business",
+    "Operating System :: OS Independent",
 ]
 
 dependencies = [
@@ -18,6 +34,13 @@ dependencies = [
     "click>=8.1.0",
     "cryptography>=41.0.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/jira-mcp-cursor"
+Documentation = "https://github.com/yourusername/jira-mcp-cursor/blob/main/docs/USER_GUIDE.md"
+Repository = "https://github.com/yourusername/jira-mcp-cursor"
+Issues = "https://github.com/yourusername/jira-mcp-cursor/issues"
+Changelog = "https://github.com/yourusername/jira-mcp-cursor/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [
@@ -40,4 +63,10 @@ line-length = 100
 
 [tool.ruff]
 line-length = 100
+
+[tool.pytest.ini_options]
+markers = [
+    "ci_critical: Critical tests that must run in CI pipeline",
+]
+asyncio_mode = "auto"
 

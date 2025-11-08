@@ -5,25 +5,60 @@ __pycache__/
 *.so
 .Python
 build/
+develop-eggs/
 dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
 *.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
 venv/
 env/
+ENV/
+.venv
 
-# Environment
+# Environment variables
 .env
 .env.local
 
 # IDE
+.vscode/
 .idea/
 *.swp
-# Note: .vscode/ is committed for shared workspace settings
+*.swo
+.cursor/
 
 # Testing
 .pytest_cache/
 .coverage
+htmlcov/
+.tox/
+.hypothesis/
 
-# Config
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jira MCP specific
 .jira-mcp/
 
-.vscode/*.code-profile
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Ruff
+.ruff_cache/
