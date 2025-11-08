@@ -278,7 +278,7 @@ For more detailed troubleshooting, see [docs/TROUBLESHOOTING.md](docs/TROUBLESHO
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/jira-mcp-cursor.git
+git clone https://github.com/Fintama/Jira_extension_for_cursor.git
 cd jira-mcp-cursor
 
 # Create virtual environment
@@ -356,8 +356,8 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## 🔗 Links
 
-- **Repository:** https://github.com/yourusername/jira-mcp-cursor
-- **Issues:** https://github.com/yourusername/jira-mcp-cursor/issues
+- **Repository:** https://github.com/Fintama/Jira_extension_for_cursor
+- **Issues:** https://github.com/Fintama/Jira_extension_for_cursor/issues
 - **PyPI:** https://pypi.org/project/jira-mcp-cursor/
 - **Jira API Docs:** https://developer.atlassian.com/cloud/jira/platform/rest/v3/
 
