@@ -387,3 +387,265 @@ class JiraClient:
             f"/issue/{issue_key}/comment",
             json={"body": comment},
         )
+
+    async def create_issue(
+        self,
+        project_key: str,
+        summary: str,
+        description: str,
+        issue_type: str = "Task",
+        priority: Optional[str] = None,
+        assignee: Optional[str] = None,
+        labels: Optional[list[str]] = None,
+        parent_key: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Create a new issue.
+
+        Args:
+            project_key: Project key (e.g., "SWI")
+            summary: Issue summary/title
+            description: Issue description
+            issue_type: Type of issue (Task, Story, Bug, Epic, etc.)
+            priority: Priority (Highest, High, Medium, Low, Lowest)
+            assignee: Account ID or email of assignee
+            labels: List of labels
+            parent_key: Parent issue key (for creating stories under epics)
+
+        Returns:
+            Created issue data including key
+        """
+        logger.info(f"Creating {issue_type} in project {project_key}: {summary}")
+
+        fields: dict[str, Any] = {
+            "project": {"key": project_key},
+            "summary": summary,
+            "description": description,
+            "issuetype": {"name": issue_type},
+        }
+
+        if priority:
+            fields["priority"] = {"name": priority}
+
+        if assignee:
+            fields["assignee"] = {"accountId": assignee}
+
+        if labels:
+            fields["labels"] = labels
+
+        if parent_key:
+            fields["parent"] = {"key": parent_key}
+
+        result = await self._request("POST", "/issue", json={"fields": fields})
+        logger.info(f"Created issue: {result.get('key')}")
+        return result
+
+    async def create_subtask(
+        self,
+        parent_key: str,
+        summary: str,
+        description: str,
+        assignee: Optional[str] = None,
+        priority: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Create a subtask under a parent issue.
+
+        Args:
+            parent_key: Parent issue key (e.g., "SWI-501")
+            summary: Subtask summary/title
+            description: Subtask description
+            assignee: Account ID or email of assignee
+            priority: Priority (Highest, High, Medium, Low, Lowest)
+
+        Returns:
+            Created subtask data including key
+        """
+        logger.info(f"Creating subtask under {parent_key}: {summary}")
+
+        # Get parent to determine project
+        parent = await self.get_issue(parent_key)
+        project_key = parent["fields"]["project"]["key"]
+
+        fields: dict[str, Any] = {
+            "project": {"key": project_key},
+            "parent": {"key": parent_key},
+            "summary": summary,
+            "description": description,
+            "issuetype": {"name": "Subtask"},
+        }
+
+        if assignee:
+            fields["assignee"] = {"accountId": assignee}
+
+        if priority:
+            fields["priority"] = {"name": priority}
+
+        result = await self._request("POST", "/issue", json={"fields": fields})
+        logger.info(f"Created subtask: {result.get('key')}")
+        return result
+
+    async def get_subtasks(self, issue_key: str) -> list[dict[str, Any]]:
+        """Get all subtasks of an issue.
+
+        Args:
+            issue_key: Parent issue key
+
+        Returns:
+            List of subtask data
+        """
+        logger.info(f"Getting subtasks for issue: {issue_key}")
+
+        # Get the parent issue
+        issue = await self.get_issue(issue_key)
+
+        # Extract subtasks from fields
+        subtasks = issue.get("fields", {}).get("subtasks", [])
+
+        # Get full details for each subtask
+        detailed_subtasks = []
+        for subtask in subtasks:
+            subtask_key = subtask.get("key")
+            if subtask_key:
+                subtask_detail = await self.get_issue(subtask_key)
+                detailed_subtasks.append(subtask_detail)
+
+        logger.info(f"Found {len(detailed_subtasks)} subtasks for {issue_key}")
+        return detailed_subtasks
+
+    async def link_issues(
+        self,
+        inward_issue: str,
+        outward_issue: str,
+        link_type: str = "Relates",
+    ) -> dict[str, Any]:
+        """Create a link between two issues.
+
+        Args:
+            inward_issue: Key of inward issue
+            outward_issue: Key of outward issue
+            link_type: Type of link (Relates, Blocks, Clones, Duplicate, etc.)
+
+        Returns:
+            Link creation result
+        """
+        logger.info(f"Linking {outward_issue} {link_type} {inward_issue}")
+
+        payload = {
+            "type": {"name": link_type},
+            "inwardIssue": {"key": inward_issue},
+            "outwardIssue": {"key": outward_issue},
+        }
+
+        return await self._request("POST", "/issueLink", json=payload)
+
+    async def assign_issue(
+        self,
+        issue_key: str,
+        assignee: str,
+    ) -> None:
+        """Assign an issue to a user.
+
+        Args:
+            issue_key: Issue key
+            assignee: Account ID or email of assignee (use "-1" for automatic, "null" for unassigned)
+        """
+        logger.info(f"Assigning issue {issue_key} to {assignee}")
+
+        if assignee in ["-1", "null"]:
+            # Unassign or automatic assignment
+            payload: dict[str, Any] = {"accountId": None}
+        else:
+            payload = {"accountId": assignee}
+
+        await self._request(
+            "PUT",
+            f"/issue/{issue_key}/assignee",
+            json=payload,
+        )
+
+    async def search_users(
+        self,
+        query: str = "",
+        max_results: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Search for users in Jira.
+
+        Args:
+            query: Search query (name, email, or username)
+            max_results: Maximum number of results
+
+        Returns:
+            List of user data
+        """
+        logger.info(f"Searching for users: {query}")
+
+        params: dict[str, Any] = {"maxResults": max_results}
+        if query:
+            params["query"] = query
+
+        # Use the user search endpoint
+        result = await self._request("GET", "/user/search", params=params)
+
+        # Result is a list of users directly
+        logger.info(f"Found {len(result)} users")
+        return result if isinstance(result, list) else []
+
+    async def delete_issue(
+        self,
+        issue_key: str,
+        delete_subtasks: bool = False,
+    ) -> None:
+        """Delete an issue.
+
+        Args:
+            issue_key: Issue key to delete
+            delete_subtasks: Whether to delete subtasks as well (default: False)
+
+        Warning:
+            This action cannot be undone!
+        """
+        logger.warning(f"Deleting issue: {issue_key} (deleteSubtasks={delete_subtasks})")
+
+        params = {}
+        if delete_subtasks:
+            params["deleteSubtasks"] = "true"
+
+        await self._request("DELETE", f"/issue/{issue_key}", params=params)
+
+    async def get_project_statuses(self, project_key: str) -> dict[str, Any]:
+        """Get all available statuses for a project.
+
+        Args:
+            project_key: Project key (e.g., "SWI")
+
+        Returns:
+            Dict with statuses by issue type
+        """
+        logger.info(f"Getting statuses for project: {project_key}")
+
+        result = await self._request("GET", f"/project/{project_key}/statuses")
+
+        # Result is a list of issue types with their statuses
+        issue_types: list[Any] = result if isinstance(result, list) else []
+
+        # Extract unique statuses across all issue types
+        all_statuses: set[str] = set()
+        statuses_by_type: dict[str, list[str]] = {}
+
+        for issue_type in issue_types:
+            if isinstance(issue_type, dict):
+                type_name = issue_type.get("name", "")
+                statuses_list = issue_type.get("statuses", [])
+                type_statuses: list[str] = []
+                for s in statuses_list:
+                    if isinstance(s, dict):
+                        name = s.get("name")
+                        if name and isinstance(name, str):
+                            type_statuses.append(name)
+                statuses_by_type[type_name] = type_statuses
+                all_statuses.update(type_statuses)
+
+        return {
+            "project": project_key,
+            "unique_statuses": sorted(list(all_statuses)),
+            "by_issue_type": statuses_by_type,
+        }

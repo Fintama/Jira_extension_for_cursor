@@ -1,5 +1,6 @@
 """Update ticket tools."""
 
+from typing import Any
 from mcp.types import Tool, TextContent
 from ..server.jira_client import JiraClient
 from ..server.exceptions import JiraAPIError
@@ -71,7 +72,7 @@ async def handle_add_ticket_comment(
 
 
 async def handle_update_ticket_description(
-    arguments: dict[str, any],
+    arguments: dict[str, Any],
     jira_client: JiraClient,
 ) -> list[TextContent]:
     """Handle update_ticket_description tool call.

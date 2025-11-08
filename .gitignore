@@ -37,6 +37,8 @@ ENV/
 *.swp
 *.swo
 .cursor/
+!.cursor/mcp.json.example
+!.cursor/README.md
 
 # Testing
 .pytest_cache/

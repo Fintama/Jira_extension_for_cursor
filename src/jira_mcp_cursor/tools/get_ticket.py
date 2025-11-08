@@ -44,6 +44,14 @@ async def handle_get_highest_priority_ticket(
         List of TextContent with highest priority ticket details or error
     """
     from ..utils.jql_builder import build_highest_priority_jql
+    from ..config.settings import Settings
+
+    settings = Settings()
+
+    # Use provided project or fall back to default
+    project = arguments.get("project")
+    if not project and settings.jira_project_key:
+        project = settings.jira_project_key
 
     # Validate and normalize exclude_status parameter
     exclude_status = arguments.get("exclude_status")
@@ -56,7 +64,7 @@ async def handle_get_highest_priority_ticket(
 
     # Build JQL query for highest priority ticket
     jql = build_highest_priority_jql(
-        project=arguments.get("project"),
+        project=project,
         exclude_statuses=exclude_status,
     )
 
@@ -99,7 +107,7 @@ GET_TICKET_TOOL = Tool(
 
 GET_HIGHEST_PRIORITY_TICKET_TOOL = Tool(
     name="get_highest_priority_ticket",
-    description="Get the highest priority ticket assigned to the current user",
+    description="Get the highest priority ticket assigned to the current user. Defaults to configured project if set.",
     inputSchema={
         "type": "object",
         "properties": {
@@ -110,7 +118,7 @@ GET_HIGHEST_PRIORITY_TICKET_TOOL = Tool(
             },
             "project": {
                 "type": "string",
-                "description": "Filter by project key",
+                "description": "Filter by project key (optional, uses default project from config if not specified)",
             },
         },
     },

@@ -23,13 +23,33 @@ def configure():
 
 
 @cli.command()
-@click.option("--config", default=None, help="Path to config file")
+@click.option("--config", default=None, help="Path to config file (optional, can use env vars)")
 def serve(config):
-    """Start MCP server (used by Cursor)"""
+    """Start MCP server (used by Cursor)
+
+    The server loads credentials from environment variables (JIRA_URL, JIRA_EMAIL, JIRA_API_TOKEN).
+    These can be set in .cursor/mcp.json or via --config file.
+    """
     import asyncio
+    import os
     from .server import run
+    from .config import SecureConfig
 
     click.echo("Starting Jira MCP Server...")
+
+    # If config file provided, load and set env vars
+    if config and os.path.exists(config):
+        storage = SecureConfig()
+        jira_config = storage.load()
+
+        # Set environment variables from config
+        os.environ["JIRA_URL"] = jira_config.get("jira_url", "")
+        os.environ["JIRA_EMAIL"] = jira_config.get("email", "")
+        os.environ["JIRA_API_TOKEN"] = jira_config.get("api_token", "")
+        if jira_config.get("default_project"):
+            os.environ["JIRA_PROJECT_KEY"] = jira_config["default_project"]
+
+    # Otherwise, env vars should already be set by Cursor from mcp.json
     asyncio.run(run())
 
 

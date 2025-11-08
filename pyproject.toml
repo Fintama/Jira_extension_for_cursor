@@ -36,11 +36,11 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/jira-mcp-cursor"
-Documentation = "https://github.com/yourusername/jira-mcp-cursor/blob/main/docs/USER_GUIDE.md"
-Repository = "https://github.com/yourusername/jira-mcp-cursor"
-Issues = "https://github.com/yourusername/jira-mcp-cursor/issues"
-Changelog = "https://github.com/yourusername/jira-mcp-cursor/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/Fintama/Jira_extension_for_cursor"
+Documentation = "https://github.com/Fintama/Jira_extension_for_cursor/blob/main/docs/USER_GUIDE.md"
+Repository = "https://github.com/Fintama/Jira_extension_for_cursor"
+Issues = "https://github.com/Fintama/Jira_extension_for_cursor/issues"
+Changelog = "https://github.com/Fintama/Jira_extension_for_cursor/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [

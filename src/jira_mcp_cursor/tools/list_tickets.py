@@ -12,10 +12,19 @@ async def handle_list_my_tickets(
     jira_client: JiraClient,
 ) -> list[TextContent]:
     """Handle list_my_tickets tool call."""
+    from ..config.settings import Settings
+
+    settings = Settings()
+
+    # Use provided project or fall back to default
+    project = arguments.get("project")
+    if not project and settings.jira_project_key:
+        project = settings.jira_project_key
+
     # Build JQL query
     jql = build_my_tickets_jql(
         status=arguments.get("status"),
-        project=arguments.get("project"),
+        project=project,
     )
 
     # Search issues
@@ -39,7 +48,7 @@ async def handle_list_my_tickets(
 # Tool definition
 LIST_MY_TICKETS_TOOL = Tool(
     name="list_my_tickets",
-    description="List all tickets assigned to the current user",
+    description="List all tickets assigned to the current user. Defaults to configured project if set.",
     inputSchema={
         "type": "object",
         "properties": {
@@ -49,7 +58,7 @@ LIST_MY_TICKETS_TOOL = Tool(
             },
             "project": {
                 "type": "string",
-                "description": "Filter by project key",
+                "description": "Filter by project key (optional, uses default project from config if not specified)",
             },
             "max_results": {
                 "type": "number",

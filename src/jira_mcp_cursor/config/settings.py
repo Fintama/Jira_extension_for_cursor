@@ -8,14 +8,15 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     # Jira Connection
-    jira_url: str
+    jira_url: str = ""  # Will be loaded from .env or encrypted config
     jira_email: Optional[str] = None
     jira_api_token: Optional[str] = None
     jira_username: Optional[str] = None
     jira_password: Optional[str] = None
 
     # Optional Configuration
-    jira_project_key: Optional[str] = None  # Deprecated - use default_project in encrypted config
+    jira_project_key: Optional[str] = None  # Default project for operations
+    jira_user_domain: Optional[str] = None  # Default domain for user searches (e.g., "@fintama.com")
     jira_max_results: int = 50
     jira_timeout: int = 30
     jira_max_retries: int = 3  # Maximum retry attempts for failed requests
@@ -46,5 +47,17 @@ class Settings(BaseSettings):
             return (self.jira_username, self.jira_password)
 
 
-# Global settings instance
-settings = Settings()
+# Global settings instance (lazy loaded)
+_settings = None
+
+
+def get_settings() -> Settings:
+    """Get or create settings instance."""
+    global _settings
+    if _settings is None:
+        _settings = Settings()
+    return _settings
+
+
+# For backward compatibility
+settings = get_settings()
