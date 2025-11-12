@@ -465,12 +465,28 @@ class JiraClient:
         parent = await self.get_issue(parent_key)
         project_key = parent["fields"]["project"]["key"]
 
+        # Get create metadata to find the subtask issue type for this project
+        metadata = await self._request(
+            "GET",
+            "/issue/createmeta",
+            params={"projectKeys": project_key, "expand": "projects.issuetypes"},
+        )
+
+        # Find the subtask issue type (could be "Subtask", "Sub-task", etc.)
+        subtask_type_name = "Subtask"  # default
+        for project in metadata.get("projects", []):
+            for issuetype in project.get("issuetypes", []):
+                if issuetype.get("subtask") is True:
+                    subtask_type_name = issuetype.get("name")
+                    logger.info(f"Found subtask type: {subtask_type_name}")
+                    break
+
         fields: dict[str, Any] = {
             "project": {"key": project_key},
             "parent": {"key": parent_key},
             "summary": summary,
             "description": description,
-            "issuetype": {"name": "Subtask"},
+            "issuetype": {"name": subtask_type_name},
         }
 
         if assignee:
