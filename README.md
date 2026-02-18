@@ -1,130 +1,111 @@
-# 🔧 Jira MCP for Cursor
+# Jira MCP for Cursor
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/tests-109%20passing-brightgreen.svg)](tests/)
 [![MCP Tools](https://img.shields.io/badge/MCP%20tools-14-blue.svg)](docs/API_REFERENCE.md)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-Seamless Jira integration for Cursor IDE through the Model Context Protocol (MCP). Create, read, and update Jira tickets directly from your AI coding assistant with complete workflow support.
-
----
-
-## ✨ Features
-
-- 🎯 **List & Search** - View tickets by assignee, creator, project, or status
-- 📖 **Read Details** - Get complete ticket information including comments and subtasks
-- 👥 **User Management** - List and search Jira users for assignment
-- 🔍 **Smart Analysis** - Extract requirements and acceptance criteria automatically
-- ⚡ **Quick Access** - Find your highest priority ticket instantly
-- ✨ **Create Workflows** - Create stories, subtasks, and complete feature breakdowns
-- ✏️ **Update Tickets** - Change status, update descriptions, add comments, assign users
-- 🗑️ **Manage Lifecycle** - Delete test tickets and clean up your workspace
-- 🔐 **Secure** - One-time encrypted configuration, credentials never in plaintext
-- 🎨 **Beautiful Setup** - Web-based wizard with guided configuration
-- 🚀 **Auto-Install** - Automatically integrates with Cursor IDE
+A Model Context Protocol (MCP) server that gives Cursor IDE full read/write access to Jira. Create, search, update, and delete tickets directly from the AI chat — 14 tools in total.
 
 ---
 
-## 🚀 Quick Start
+## Setup
 
 ### Prerequisites
 
-- Python 3.11 or higher
-- Cursor IDE
-- Jira account with API token ([Get one here](https://id.atlassian.com/manage-profile/security/api-tokens))
+- **Python 3.11+** — check with `python3 --version`
+- **Cursor IDE**
+- **Jira API token** — generate one at https://id.atlassian.com/manage-profile/security/api-tokens
 
-### Installation (3 Steps)
-
-#### 1. Install the Package
+### Step 1: Clone and install
 
 ```bash
-# Clone the repository
 git clone https://github.com/Fintama/Jira_extension_for_cursor.git
-cd jira-mcp-cursor
+cd Jira_extension_for_cursor
 
-# Create and activate virtual environment
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+python3 -m venv venv
+source venv/bin/activate   # Windows: venv\Scripts\activate
 
-# Install the package
 pip install -e .
 ```
 
-#### 2. Configure Jira Credentials
+### Step 2: Configure Cursor MCP
 
-```bash
-# Launch setup wizard (opens in browser)
-jira-mcp configure
-```
+Add the Jira MCP server to your Cursor config. Open (or create) the file:
 
-The wizard will guide you through:
-1. Enter your Jira URL (e.g., `https://your-domain.atlassian.net`)
-2. Enter your email
-3. Enter your API token
-4. Test connection ✅
-5. Save encrypted configuration to `~/.jira-mcp/config.json`
+- **Global (all projects):** `~/.cursor/mcp.json`
+- **Per-project:** `<project-root>/.cursor/mcp.json`
 
-#### 3. Add to Cursor
+Paste this, replacing the placeholder values with your own:
 
-```bash
-# Automatically create .cursor/mcp.json in your project
-jira-mcp install
-```
-
-⚠️ **Security Note:** The `.cursor/mcp.json` file contains your API token and is **automatically gitignored**. Never commit this file!
-
-This creates `.cursor/mcp.json` with your credentials and default project:
 ```json
 {
   "mcpServers": {
     "jira": {
-      "command": "/path/to/venv/bin/python",
+      "command": "/absolute/path/to/Jira_extension_for_cursor/venv/bin/python",
       "args": ["-m", "jira_mcp_cursor.cli", "serve"],
       "env": {
-        "PYTHONPATH": "/path/to/project",
+        "PYTHONPATH": "/absolute/path/to/Jira_extension_for_cursor/src",
         "JIRA_URL": "https://your-domain.atlassian.net",
-        "JIRA_EMAIL": "your-email@example.com",
+        "JIRA_EMAIL": "you@example.com",
         "JIRA_API_TOKEN": "your-api-token",
-        "JIRA_PROJECT_KEY": "SWI"
+        "JIRA_PROJECT_KEY": "PROJ"
       }
     }
   }
 }
 ```
 
-**💡 Default Project Context:**
+**You must use absolute paths.** To get them, run this from the repo root:
 
-**`JIRA_PROJECT_KEY`** - Scopes ticket operations to your project:
-- List tickets → Only shows SWI tickets
-- Create issues → Defaults to SWI project
-- Simplifies: "Create a story" (auto-creates in SWI)
+```bash
+echo "command: $(pwd)/venv/bin/python"
+echo "PYTHONPATH: $(pwd)/src"
+```
 
-**User Search Tip:**
-Search by name (e.g., "andrea", "john") to find teammates. Leave empty to list all available users.
+> **Windows (WSL):** If you cloned inside WSL, use the Linux paths (e.g. `/home/you/...`), not Windows paths. Cursor running in WSL mode will resolve them correctly.
 
-#### 4. Restart Cursor
+> **Windows (native):** Use `venv\\Scripts\\python.exe` as the command and backslash paths.
 
-- **Reload Window:** `Ctrl+Shift+P` → "Reload Window"
-- Or restart Cursor completely
+**What each `env` variable does:**
 
-#### 5. Verify Installation
+| Variable | Required | Description |
+|---|---|---|
+| `PYTHONPATH` | Yes | Path to the `src/` directory so Python can find the package |
+| `JIRA_URL` | Yes | Your Jira instance (e.g. `https://acme.atlassian.net`) |
+| `JIRA_EMAIL` | Yes | Email of your Jira account |
+| `JIRA_API_TOKEN` | Yes | API token (not your password) |
+| `JIRA_PROJECT_KEY` | No | Default project key (e.g. `SP`, `SWI`). Scopes list/create operations so you don't have to specify the project every time |
 
-1. Open Cursor Settings → **Tools & MCP**
-2. You should see **"jira"** server with **"14 tools"**
-3. Toggle should be **ON** (green)
+### Step 3: Reload Cursor
 
-### Start Using
+- Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on Mac) and run **"Reload Window"**
+- Or restart Cursor entirely
 
-Open Cursor chat and try:
-- "Show me my assigned Jira tickets"
-- "Get details for ticket PROJ-123"
-- "What's my highest priority ticket?"
-- "Analyze ticket PROJ-456 and extract requirements"
-- "Create a story in project SWI: Implement user authentication"
-- "Break down SWI-500 into 3 subtasks for backend, frontend, and testing"
-- "Move PROJ-123 to In Progress"
-- "Add a comment to PROJ-789: Implementation completed"
+### Step 4: Verify
+
+1. Open **Cursor Settings > Tools & MCP**
+2. You should see **"jira"** listed with a green toggle and **14 tools**
+
+If the toggle is red, click it to see the error. Common issues:
+- Wrong Python path (check the absolute path exists)
+- Missing `pip install -e .` (the package isn't installed in the venv)
+- Bad API token (expired or copy-paste error)
+
+---
+
+## Usage
+
+Once configured, open Cursor chat (Agent or Composer) and try:
+
+```
+Show me my assigned Jira tickets
+Get details for ticket PROJ-123
+What's my highest priority ticket?
+Create a story: Implement user authentication
+Break down PROJ-500 into 3 subtasks
+Move PROJ-123 to In Progress
+Add a comment to PROJ-789: Implementation completed
+```
 
 ---
 
@@ -447,20 +428,17 @@ For more detailed troubleshooting, see [docs/TROUBLESHOOTING.md](docs/TROUBLESHO
 ### Setup Development Environment
 
 ```bash
-# Clone repository
 git clone https://github.com/Fintama/Jira_extension_for_cursor.git
-cd jira-mcp-cursor
+cd Jira_extension_for_cursor
 
-# Create virtual environment
-python -m venv venv
+python3 -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 
 # Install with dev dependencies
 pip install -e ".[dev]"
 
-# Copy environment template
+# Copy environment template and fill in your credentials
 cp .env.example .env
-# Edit .env with your Jira credentials
 ```
 
 ### Running Tests
