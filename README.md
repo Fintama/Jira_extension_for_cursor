@@ -16,7 +16,18 @@ A Model Context Protocol (MCP) server that gives Cursor IDE full read/write acce
 - **Cursor IDE**
 - **Jira API token** — generate one at https://id.atlassian.com/manage-profile/security/api-tokens
 
-### Step 1: Clone and install
+### Step 1: Install
+
+```bash
+pip install jira-mcp-cursor
+```
+
+That's it. This installs the `jira-mcp` command globally.
+
+> **Prefer isolation?** Use `pipx install jira-mcp-cursor` or install in a venv.
+
+<details>
+<summary><strong>Alternative: install from source</strong></summary>
 
 ```bash
 git clone https://github.com/Fintama/Jira_extension_for_cursor.git
@@ -27,6 +38,8 @@ source venv/bin/activate   # Windows: venv\Scripts\activate
 
 pip install -e .
 ```
+
+</details>
 
 ### Step 2: Configure Cursor MCP
 
@@ -41,10 +54,9 @@ Paste this, replacing the placeholder values with your own:
 {
   "mcpServers": {
     "jira": {
-      "command": "/absolute/path/to/Jira_extension_for_cursor/venv/bin/python",
-      "args": ["-m", "jira_mcp_cursor.cli", "serve"],
+      "command": "jira-mcp",
+      "args": ["serve"],
       "env": {
-        "PYTHONPATH": "/absolute/path/to/Jira_extension_for_cursor/src",
         "JIRA_URL": "https://your-domain.atlassian.net",
         "JIRA_EMAIL": "you@example.com",
         "JIRA_API_TOKEN": "your-api-token",
@@ -55,22 +67,17 @@ Paste this, replacing the placeholder values with your own:
 }
 ```
 
-**You must use absolute paths.** To get them, run this from the repo root:
-
-```bash
-echo "command: $(pwd)/venv/bin/python"
-echo "PYTHONPATH: $(pwd)/src"
-```
-
-> **Windows (WSL):** If you cloned inside WSL, use the Linux paths (e.g. `/home/you/...`), not Windows paths. Cursor running in WSL mode will resolve them correctly.
-
-> **Windows (native):** Use `venv\\Scripts\\python.exe` as the command and backslash paths.
+> **Installed from source?** Use the full path to the venv Python instead:
+> ```json
+> "command": "/absolute/path/to/Jira_extension_for_cursor/venv/bin/python",
+> "args": ["-m", "jira_mcp_cursor.cli", "serve"],
+> ```
+> Get the path with: `echo "$(pwd)/venv/bin/python"` from the repo root.
 
 **What each `env` variable does:**
 
 | Variable | Required | Description |
 |---|---|---|
-| `PYTHONPATH` | Yes | Path to the `src/` directory so Python can find the package |
 | `JIRA_URL` | Yes | Your Jira instance (e.g. `https://acme.atlassian.net`) |
 | `JIRA_EMAIL` | Yes | Email of your Jira account |
 | `JIRA_API_TOKEN` | Yes | API token (not your password) |
@@ -87,8 +94,7 @@ echo "PYTHONPATH: $(pwd)/src"
 2. You should see **"jira"** listed with a green toggle and **14 tools**
 
 If the toggle is red, click it to see the error. Common issues:
-- Wrong Python path (check the absolute path exists)
-- Missing `pip install -e .` (the package isn't installed in the venv)
+- `jira-mcp` command not found (check `pip install jira-mcp-cursor` succeeded and the install location is on your PATH)
 - Bad API token (expired or copy-paste error)
 
 ---
