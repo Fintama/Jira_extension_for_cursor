@@ -481,9 +481,10 @@ mypy src/jira_mcp_cursor/
 ## 📚 Documentation
 
 ### Getting Started
-- **[MCP Setup Guide](docs/MCP_SETUP_GUIDE.md)** - ⭐ Complete MCP integration setup
-- **[How It Works](docs/HOW_IT_WORKS.md)** - 🔍 Architecture and flow explained
-- **[User Guide](docs/USER_GUIDE.md)** - Detailed setup and usage
+- **[Setup Guide](docs/SETUP_GUIDE.md)** - Step-by-step install for Windows, WSL, and Mac/Linux
+- **[MCP Setup Guide](docs/MCP_SETUP_GUIDE.md)** - MCP integration details
+- **[How It Works](docs/HOW_IT_WORKS.md)** - Architecture and flow explained
+- **[User Guide](docs/USER_GUIDE.md)** - Detailed usage
 
 ### Reference
 - **[API Reference](docs/API_REFERENCE.md)** - Complete tool documentation
