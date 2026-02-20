@@ -21,18 +21,37 @@ async def test_search_issues():
                 "fields": {
                     "summary": "Test ticket",
                     "status": {"name": "To Do"},
+                    "assignee": {"displayName": "John Doe"},
                 },
-            }
+            },
+            {
+                "key": "TEST-456",
+                "fields": {
+                    "summary": "Another ticket",
+                    "status": {"name": "In Progress"},
+                    "assignee": {"displayName": "John Doe"},
+                },
+            },
         ],
-        "total": 1,
     }
 
-    with patch.object(client, "_request", new=AsyncMock(return_value=mock_response)):
-        result = await client.search_issues("assignee = currentUser()")
+    with patch.object(client, "_request", new=AsyncMock(return_value=mock_response)) as mock_req:
+        result = await client.search_issues(
+            'assignee = "John Doe"',
+            fields=["summary", "status"],
+            max_results=10,
+        )
 
-        assert result["total"] == 1
-        assert len(result["issues"]) == 1
+        mock_req.assert_called_once_with(
+            "POST",
+            "/search/jql",
+            json={"jql": 'assignee = "John Doe"', "maxResults": 10, "fields": ["summary", "status"]},
+            api_version=3,
+        )
+
+        assert len(result["issues"]) == 2
         assert result["issues"][0]["key"] == "TEST-123"
+        assert result["total"] == 2
 
 
 @pytest.mark.asyncio
