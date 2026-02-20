@@ -8,6 +8,7 @@ from jira_mcp_cursor.tools import (
     handle_update_ticket_status,
     handle_add_ticket_comment,
 )
+from jira_mcp_cursor.tools.create_ticket import handle_list_tickets_by_creator
 from jira_mcp_cursor.tools.get_ticket import handle_get_highest_priority_ticket
 from jira_mcp_cursor.tools.analyze_ticket import handle_analyze_ticket
 from jira_mcp_cursor.server.jira_client import JiraClient
@@ -631,3 +632,54 @@ async def test_update_nonexistent_ticket_description():
         await handle_update_ticket_description(arguments, mock_client)
 
     assert exc_info.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_list_tickets_by_creator_quotes_creator_with_spaces():
+    """Creator with spaces must be quoted in JQL to avoid parse errors."""
+    mock_client = AsyncMock(spec=JiraClient)
+    mock_client.search_issues.return_value = {"issues": [], "total": 0}
+
+    await handle_list_tickets_by_creator(
+        {"creator": "John Doe", "project": "TEST"},
+        mock_client,
+    )
+
+    jql = mock_client.search_issues.call_args[1]["jql"]
+    assert 'reporter="John Doe"' in jql, (
+        f"Expected quoted reporter in JQL, got: {jql}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_list_tickets_by_creator_quotes_account_id():
+    """Account IDs should also be quoted in JQL."""
+    mock_client = AsyncMock(spec=JiraClient)
+    mock_client.search_issues.return_value = {"issues": [], "total": 0}
+
+    await handle_list_tickets_by_creator(
+        {"creator": "abc123def456", "project": "TEST"},
+        mock_client,
+    )
+
+    jql = mock_client.search_issues.call_args[1]["jql"]
+    assert 'reporter="abc123def456"' in jql, (
+        f"Expected quoted account ID in JQL, got: {jql}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_list_tickets_by_creator_quotes_email():
+    """Email addresses with special characters must be quoted in JQL."""
+    mock_client = AsyncMock(spec=JiraClient)
+    mock_client.search_issues.return_value = {"issues": [], "total": 0}
+
+    await handle_list_tickets_by_creator(
+        {"creator": "john@example.com", "project": "TEST"},
+        mock_client,
+    )
+
+    jql = mock_client.search_issues.call_args[1]["jql"]
+    assert 'reporter="john@example.com"' in jql, (
+        f"Expected quoted email in JQL, got: {jql}"
+    )
