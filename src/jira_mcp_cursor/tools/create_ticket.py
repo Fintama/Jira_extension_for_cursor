@@ -432,7 +432,7 @@ async def handle_list_tickets_by_creator(
         project = settings.jira_project_key
 
     # Build JQL query
-    jql_parts = [f"reporter={creator}"]
+    jql_parts = [f'reporter="{creator}"']
 
     if project:
         jql_parts.append(f"project={project}")
