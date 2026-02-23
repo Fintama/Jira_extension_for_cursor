@@ -246,25 +246,72 @@ async def test_jira_client_timeout():
 
 
 @pytest.mark.asyncio
-async def test_get_epic_issue_types():
-    """Test fuzzy case-insensitive filtering of issue types containing 'epic'."""
+async def test_get_project_issue_types():
+    """Test project-scoped issue type discovery with caching."""
     client = JiraClient(
         base_url="https://test.atlassian.net",
         auth=("test@example.com", "token"),
     )
 
-    mock_response = [
-        {"id": "10000", "name": "Epic", "subtask": False},
-        {"id": "10001", "name": "Story", "subtask": False},
-        {"id": "10002", "name": "Bug", "subtask": False},
-        {"id": "10003", "name": "program epic", "subtask": False},
-        {"id": "10004", "name": "PORTFOLIO EPIC", "subtask": False},
-        {"id": "10005", "name": "Subtask", "subtask": True},
-        {"id": "10006", "name": "Epic", "subtask": False},
-    ]
+    mock_statuses = {
+        "project": "PROJ",
+        "unique_statuses": ["To Do", "Done"],
+        "by_issue_type": {
+            "Program epic": ["To Do", "Done"],
+            "Story": ["To Do", "Done"],
+            "Bug": ["To Do", "Done"],
+        },
+    }
 
-    with patch.object(client, "_request", new=AsyncMock(return_value=mock_response)):
-        result = await client.get_epic_issue_types()
+    with patch.object(client, "get_project_statuses", new=AsyncMock(return_value=mock_statuses)):
+        result = await client.get_project_issue_types("PROJ")
+        assert result == ["Program epic", "Story", "Bug"]
 
-        client._request.assert_called_once_with("GET", "/issuetype", api_version=3)
-        assert result == ["Epic", "program epic", "PORTFOLIO EPIC"]
+        # Second call should use cache, not call get_project_statuses again
+        result2 = await client.get_project_issue_types("PROJ")
+        assert result2 == ["Program epic", "Story", "Bug"]
+        client.get_project_statuses.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_resolve_issue_type_exact_match():
+    """Exact case-insensitive match takes priority, works across projects."""
+    client = JiraClient(
+        base_url="https://test.atlassian.net",
+        auth=("test@example.com", "token"),
+    )
+    client._project_types_cache["PROJ"] = ["Epic", "Program Epic", "Story", "Bug"]
+    client._project_types_cache["SP"] = ["Program epic", "Feature", "Story"]
+
+    assert await client.resolve_issue_type("epic", "PROJ") == "Epic"
+    assert await client.resolve_issue_type("EPIC", "PROJ") == "Epic"
+    assert await client.resolve_issue_type("story", "PROJ") == "Story"
+    assert await client.resolve_issue_type("epic", "SP") == "Program epic"
+
+
+@pytest.mark.asyncio
+async def test_resolve_issue_type_single_substring_match():
+    """Single substring match resolves when no exact match exists."""
+    client = JiraClient(
+        base_url="https://test.atlassian.net",
+        auth=("test@example.com", "token"),
+    )
+    client._project_types_cache["PROJ"] = ["Program Epic", "Story", "Bug"]
+
+    assert await client.resolve_issue_type("program", "PROJ") == "Program Epic"
+
+
+@pytest.mark.asyncio
+async def test_resolve_issue_type_ambiguous_or_missing():
+    """Ambiguous substring matches and unknown names both raise ValueError."""
+    client = JiraClient(
+        base_url="https://test.atlassian.net",
+        auth=("test@example.com", "token"),
+    )
+    client._project_types_cache["PROJ"] = ["Program Epic", "Portfolio Epic", "Story"]
+
+    with pytest.raises(ValueError, match="Ambiguous"):
+        await client.resolve_issue_type("epic", "PROJ")
+
+    with pytest.raises(ValueError, match="not found"):
+        await client.resolve_issue_type("initiative", "PROJ")

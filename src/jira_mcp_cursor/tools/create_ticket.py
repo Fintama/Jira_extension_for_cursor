@@ -9,14 +9,17 @@ import json
 # Tool Definitions
 CREATE_ISSUE_TOOL = Tool(
     name="create_issue",
-    description="""Create a new Jira issue (Story, Task, Bug, etc.).
+    description="""Create a new Jira issue (Story, Task, Bug, Epic, etc.).
 
-Use this to create stories under a feature/epic, or standalone tasks.
+The issue type is resolved dynamically against the target project's configured
+types using fuzzy matching (e.g. 'epic' resolves to 'Program Epic' if that's
+what the project uses).
 
 Example uses:
 - Create a story under an epic for implementation phases
 - Create a task for a specific piece of work
 - Create a bug report
+- Create an epic (supports variants like "Program Epic" or "Portfolio Epic")
 
 If project_key is not specified, uses the default project from configuration.""",
     inputSchema={
@@ -36,7 +39,10 @@ If project_key is not specified, uses the default project from configuration."""
             },
             "issue_type": {
                 "type": "string",
-                "description": "Type of issue: Task, Story, Bug, Epic (default: Task)",
+                "description": (
+                    "Type of issue (default: Task). Resolved dynamically against the "
+                    "project's configured types (e.g. 'epic' matches 'Program Epic')."
+                ),
                 "default": "Task",
             },
             "priority": {
@@ -165,6 +171,8 @@ async def handle_create_issue(
     assignee = arguments.get("assignee")
     labels = arguments.get("labels")
     parent_key = arguments.get("parent_key")
+
+    issue_type = await jira_client.resolve_issue_type(issue_type, project_key)
 
     result = await jira_client.create_issue(
         project_key=project_key,

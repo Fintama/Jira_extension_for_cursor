@@ -1,7 +1,11 @@
 """MCP tools for Jira operations."""
 
-from .list_tickets import LIST_MY_TICKETS_TOOL, handle_list_my_tickets
-from .list_epics import LIST_EPICS_TOOL, handle_list_epics
+from .list_tickets import (
+    LIST_MY_TICKETS_TOOL,
+    LIST_TICKETS_TOOL,
+    handle_list_my_tickets,
+    handle_list_tickets,
+)
 from .get_ticket import (
     GET_TICKET_TOOL,
     GET_HIGHEST_PRIORITY_TICKET_TOOL,
@@ -40,8 +44,8 @@ __all__ = [
     # Read operations
     "LIST_MY_TICKETS_TOOL",
     "handle_list_my_tickets",
-    "LIST_EPICS_TOOL",
-    "handle_list_epics",
+    "LIST_TICKETS_TOOL",
+    "handle_list_tickets",
     "GET_TICKET_TOOL",
     "handle_get_ticket",
     "GET_HIGHEST_PRIORITY_TICKET_TOOL",
