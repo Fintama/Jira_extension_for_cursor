@@ -512,9 +512,9 @@ class JiraClient:
             self._epic_types_cache = []
             return self._epic_types_cache
 
-        self._epic_types_cache = [
+        self._epic_types_cache = list(dict.fromkeys(
             t["name"] for t in result if "epic" in t.get("name", "").lower()
-        ]
+        ))
         logger.info(f"Found epic issue types: {self._epic_types_cache}")
         return self._epic_types_cache
 

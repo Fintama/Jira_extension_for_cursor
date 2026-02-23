@@ -260,6 +260,7 @@ async def test_get_epic_issue_types():
         {"id": "10003", "name": "program epic", "subtask": False},
         {"id": "10004", "name": "PORTFOLIO EPIC", "subtask": False},
         {"id": "10005", "name": "Subtask", "subtask": True},
+        {"id": "10006", "name": "Epic", "subtask": False},
     ]
 
     with patch.object(client, "_request", new=AsyncMock(return_value=mock_response)):
