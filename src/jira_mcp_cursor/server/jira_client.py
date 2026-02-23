@@ -41,6 +41,7 @@ class JiraClient:
         params: Optional[dict[str, Any]] = None,
         json: Optional[dict[str, Any]] = None,
         retry_count: int = 0,
+        api_version: int = 2,
     ) -> dict[str, Any]:
         """Make authenticated request to Jira API with retry logic.
 
@@ -53,6 +54,8 @@ class JiraClient:
             params: Query parameters
             json: JSON body for POST/PUT requests
             retry_count: Current retry attempt (internal, starts at 0)
+            api_version: REST API version (default 2; use 3 for endpoints
+                that require it, e.g. POST /search/jql)
 
         Returns:
             JSON response from Jira API
@@ -64,7 +67,7 @@ class JiraClient:
             ValidationError: On 400 responses
             JiraAPIError: On other errors
         """
-        url = f"{self.base_url}/rest/api/2{endpoint}"
+        url = f"{self.base_url}/rest/api/{api_version}{endpoint}"
 
         async with httpx.AsyncClient() as client:
             try:
@@ -118,6 +121,7 @@ class JiraClient:
                             params,
                             json,
                             retry_count=retry_count + 1,
+                            api_version=api_version,
                         )
                     else:
                         raise RateLimitError(
@@ -148,137 +152,11 @@ class JiraClient:
                         params,
                         json,
                         retry_count=retry_count + 1,
+                        api_version=api_version,
                     )
                 else:
                     logger.error(f"Request error: {str(e)}")
                     raise JiraAPIError(f"Request failed: {str(e)}")
-
-    async def _get_board_id(self) -> Optional[int]:
-        """Get the first available board ID for fallback queries.
-
-        Returns:
-            Board ID if found, None otherwise
-        """
-        try:
-            # Note: agile API uses /rest/agile prefix, not /rest/api
-            url = f"{self.base_url}/rest/agile/1.0/board"
-
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    url,
-                    auth=self.auth,
-                    params={"maxResults": 1},
-                    timeout=self.timeout,
-                )
-                response.raise_for_status()
-                result = response.json()
-
-            boards = result.get("values", [])
-            if boards:
-                logger.info(
-                    f"Found board for fallback: {boards[0]['name']} (ID: {boards[0]['id']})"
-                )
-                return boards[0]["id"]
-            return None
-        except Exception as e:
-            logger.warning(f"Could not get board ID: {e}")
-            return None
-
-    async def _search_via_agile_api(
-        self,
-        jql: str,
-        fields: Optional[list[str]] = None,
-        max_results: int = 50,
-    ) -> dict[str, Any]:
-        """Search for issues using Agile Board API as fallback.
-
-        This is used when the standard /search endpoint is unavailable (410).
-        Searches across all accessible boards and aggregates results.
-
-        Args:
-            jql: JQL query string
-            fields: Fields to include (not fully supported in agile API)
-            max_results: Maximum results to return
-
-        Returns:
-            Response in same format as standard search
-        """
-        logger.info(f"Using agile board API fallback with JQL: {jql}")
-
-        # Get all accessible boards
-        try:
-            url = f"{self.base_url}/rest/agile/1.0/board"
-
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    url,
-                    auth=self.auth,
-                    params={"maxResults": 50},  # Get up to 50 boards
-                    timeout=self.timeout,
-                )
-                response.raise_for_status()
-                boards_result = response.json()
-
-            boards = boards_result.get("values", [])
-            logger.info(f"Found {len(boards)} accessible boards")
-
-            if not boards:
-                logger.error("No boards found for agile API fallback")
-                return {"issues": [], "total": 0}
-
-            # Search across all boards and aggregate results
-            all_issues = []
-            seen_keys = set()
-
-            for board in boards[:10]:  # Limit to first 10 boards to avoid too many API calls
-                board_id = board["id"]
-                board_name = board["name"]
-
-                try:
-                    url = f"{self.base_url}/rest/agile/1.0/board/{board_id}/issue"
-                    params: dict[str, Any] = {
-                        "jql": jql,
-                        "maxResults": max_results,
-                    }
-                    if fields:
-                        params["fields"] = ",".join(fields)
-
-                    async with httpx.AsyncClient() as client:
-                        response = await client.get(
-                            url,
-                            auth=self.auth,
-                            params=params,
-                            timeout=self.timeout,
-                        )
-                        response.raise_for_status()
-                        result = response.json()
-
-                    # Add unique issues (avoid duplicates across boards)
-                    for issue in result.get("issues", []):
-                        issue_key = issue.get("key")
-                        if issue_key and issue_key not in seen_keys:
-                            all_issues.append(issue)
-                            seen_keys.add(issue_key)
-
-                            # Stop if we hit max_results
-                            if len(all_issues) >= max_results:
-                                break
-
-                    if len(all_issues) >= max_results:
-                        break
-
-                except Exception as board_error:
-                    logger.debug(f"Could not search board {board_name}: {board_error}")
-                    continue
-
-            return {
-                "issues": all_issues[:max_results],
-                "total": len(all_issues),
-            }
-
-        except Exception as e:
-            logger.error(f"Agile API fallback failed: {e}")
-            return {"issues": [], "total": 0}
 
     async def search_issues(
         self,
@@ -288,9 +166,6 @@ class JiraClient:
     ) -> dict[str, Any]:
         """Search for issues using JQL.
 
-        Automatically falls back to agile board API if standard search
-        endpoint is unavailable (HTTP 410).
-
         Args:
             jql: JQL query string
             fields: Fields to include in response
@@ -299,33 +174,19 @@ class JiraClient:
         Returns:
             Dict with 'issues' list and 'total' count
         """
-        params: dict[str, Any] = {
+        body: dict[str, Any] = {
             "jql": jql,
             "maxResults": max_results,
         }
         if fields:
-            params["fields"] = ",".join(fields)
+            body["fields"] = fields
 
         logger.info(f"Searching issues with JQL: {jql}")
 
-        try:
-            return await self._request("GET", "/search", params=params)
-        except JiraAPIError as e:
-            # If search endpoint is gone (410), try agile board API fallback
-            if e.status_code == 410:
-                logger.warning(
-                    "Standard search endpoint unavailable (410), using agile board API fallback"
-                )
-                try:
-                    return await self._search_via_agile_api(jql, fields, max_results)
-                except Exception as fallback_error:
-                    logger.error(f"Agile API fallback also failed: {fallback_error}")
-                    raise JiraAPIError(
-                        "Unable to search issues. Both standard and agile APIs failed. "
-                        "Please check your Jira permissions.",
-                        status_code=410,
-                    )
-            raise
+        result = await self._request("POST", "/search/jql", json=body, api_version=3)
+        if "total" not in result:
+            result["total"] = len(result.get("issues", []))
+        return result
 
     async def get_issue(
         self,
