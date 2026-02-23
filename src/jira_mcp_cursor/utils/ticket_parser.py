@@ -11,9 +11,12 @@ def parse_ticket_summary(issue: dict[str, Any]) -> dict[str, Any]:
         "key": issue.get("key"),
         "summary": fields.get("summary"),
         "status": fields.get("status", {}).get("name"),
-        "priority": fields.get("priority", {}).get("name"),
+        "priority": fields.get("priority", {}).get("name") if fields.get("priority") else None,
         "assignee": (
             fields.get("assignee", {}).get("displayName") if fields.get("assignee") else None
+        ),
+        "issue_type": (
+            fields.get("issuetype", {}).get("name") if fields.get("issuetype") else None
         ),
         "created": fields.get("created"),
         "updated": fields.get("updated"),

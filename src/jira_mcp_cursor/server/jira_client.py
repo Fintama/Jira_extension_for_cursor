@@ -33,6 +33,7 @@ class JiraClient:
         self.auth = auth
         self.timeout = timeout
         self.max_retries = max_retries
+        self._epic_types_cache: list[str] | None = None
 
     async def _request(
         self,
@@ -487,6 +488,35 @@ class JiraClient:
             params["deleteSubtasks"] = "true"
 
         await self._request("DELETE", f"/issue/{issue_key}", params=params)
+
+    async def get_epic_issue_types(self) -> list[str]:
+        """Discover all issue types whose name contains 'epic' (case-insensitive).
+
+        Queries the Jira instance for all configured issue types and returns
+        the names of any that fuzzy-match 'epic', capturing standard Epics,
+        Program Epics, Portfolio Epics, or any custom variant.
+
+        Results are cached for the lifetime of the client since issue types
+        rarely change during a session.
+
+        Returns:
+            List of matching issue type names (e.g. ["Epic", "Program Epic"])
+        """
+        if self._epic_types_cache is not None:
+            return self._epic_types_cache
+
+        logger.info("Discovering epic issue types")
+        result = await self._request("GET", "/issuetype", api_version=3)
+
+        if not isinstance(result, list):
+            self._epic_types_cache = []
+            return self._epic_types_cache
+
+        self._epic_types_cache = [
+            t["name"] for t in result if "epic" in t.get("name", "").lower()
+        ]
+        logger.info(f"Found epic issue types: {self._epic_types_cache}")
+        return self._epic_types_cache
 
     async def get_project_statuses(self, project_key: str) -> dict[str, Any]:
         """Get all available statuses for a project.

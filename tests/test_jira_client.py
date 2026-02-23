@@ -243,3 +243,27 @@ async def test_jira_client_timeout():
             await client.get_issue("TEST-123")
 
         assert "Timeout" in str(exc_info.value) or "Request failed" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_get_epic_issue_types():
+    """Test fuzzy case-insensitive filtering of issue types containing 'epic'."""
+    client = JiraClient(
+        base_url="https://test.atlassian.net",
+        auth=("test@example.com", "token"),
+    )
+
+    mock_response = [
+        {"id": "10000", "name": "Epic", "subtask": False},
+        {"id": "10001", "name": "Story", "subtask": False},
+        {"id": "10002", "name": "Bug", "subtask": False},
+        {"id": "10003", "name": "program epic", "subtask": False},
+        {"id": "10004", "name": "PORTFOLIO EPIC", "subtask": False},
+        {"id": "10005", "name": "Subtask", "subtask": True},
+    ]
+
+    with patch.object(client, "_request", new=AsyncMock(return_value=mock_response)):
+        result = await client.get_epic_issue_types()
+
+        client._request.assert_called_once_with("GET", "/issuetype", api_version=3)
+        assert result == ["Epic", "program epic", "PORTFOLIO EPIC"]

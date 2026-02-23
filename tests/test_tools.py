@@ -11,6 +11,7 @@ from jira_mcp_cursor.tools import (
 from jira_mcp_cursor.tools.create_ticket import handle_list_tickets_by_creator
 from jira_mcp_cursor.tools.get_ticket import handle_get_highest_priority_ticket
 from jira_mcp_cursor.tools.analyze_ticket import handle_analyze_ticket
+from jira_mcp_cursor.tools.list_epics import handle_list_epics
 from jira_mcp_cursor.server.jira_client import JiraClient
 from jira_mcp_cursor.server.exceptions import JiraAPIError
 import json
@@ -683,3 +684,54 @@ async def test_list_tickets_by_creator_quotes_email():
     assert 'reporter="john@example.com"' in jql, (
         f"Expected quoted email in JQL, got: {jql}"
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.ci_critical
+async def test_list_epics_handler_golden_path():
+    """CI: Test list_epics discovers epic types, builds correct JQL, and returns parsed epics."""
+    mock_client = AsyncMock(spec=JiraClient)
+    mock_client.get_epic_issue_types.return_value = ["Epic", "Program Epic"]
+    mock_client.search_issues.return_value = {
+        "issues": [
+            {
+                "key": "PROJ-100",
+                "fields": {
+                    "summary": "Auth Epic",
+                    "status": {"name": "In Progress"},
+                    "priority": {"name": "High"},
+                    "assignee": {"displayName": "John Doe"},
+                    "issuetype": {"name": "Epic"},
+                    "created": "2025-01-01T00:00:00Z",
+                    "updated": "2025-01-15T00:00:00Z",
+                },
+            },
+        ],
+        "total": 1,
+    }
+
+    result = await handle_list_epics({"project": "PROJ"}, mock_client)
+
+    data = json.loads(result[0].text)
+    assert data["total"] == 1
+    assert data["epic_types_found"] == ["Epic", "Program Epic"]
+    assert data["epics"][0]["key"] == "PROJ-100"
+    assert data["epics"][0]["issue_type"] == "Epic"
+
+    jql = mock_client.search_issues.call_args[1]["jql"]
+    assert 'issuetype IN ("Epic", "Program Epic")' in jql
+    assert 'project = "PROJ"' in jql
+
+
+@pytest.mark.asyncio
+async def test_list_epics_no_epic_types_found():
+    """Test short-circuit: no epic types discovered means no search call."""
+    mock_client = AsyncMock(spec=JiraClient)
+    mock_client.get_epic_issue_types.return_value = []
+
+    result = await handle_list_epics({}, mock_client)
+
+    data = json.loads(result[0].text)
+    assert data["total"] == 0
+    assert data["epics"] == []
+    mock_client.search_issues.assert_not_called()

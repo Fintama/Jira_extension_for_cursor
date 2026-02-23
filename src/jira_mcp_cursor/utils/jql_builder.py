@@ -24,6 +24,24 @@ def build_my_tickets_jql(
     return " AND ".join(parts)
 
 
+def build_epics_jql(
+    epic_type_names: list[str],
+    project: Optional[str] = None,
+    status: Optional[str] = None,
+) -> str:
+    """Build JQL query to find epics by their discovered issue type names."""
+    quoted = ", ".join(f'"{name}"' for name in epic_type_names)
+    parts = [f"issuetype IN ({quoted})"]
+
+    if project:
+        parts.append(f'project = "{project}"')
+
+    if status:
+        parts.append(f'status = "{status}"')
+
+    return " AND ".join(parts) + " ORDER BY updated DESC"
+
+
 def build_highest_priority_jql(
     project: Optional[str] = None,
     exclude_statuses: Optional[list[str]] = None,
