@@ -8,9 +8,10 @@ from jira_mcp_cursor.tools import (
     handle_update_ticket_status,
     handle_add_ticket_comment,
 )
-from jira_mcp_cursor.tools.create_ticket import handle_list_tickets_by_creator
+from jira_mcp_cursor.tools.create_ticket import handle_list_tickets_by_creator, handle_create_issue
 from jira_mcp_cursor.tools.get_ticket import handle_get_highest_priority_ticket
 from jira_mcp_cursor.tools.analyze_ticket import handle_analyze_ticket
+from jira_mcp_cursor.tools.list_tickets import handle_list_tickets
 from jira_mcp_cursor.server.jira_client import JiraClient
 from jira_mcp_cursor.server.exceptions import JiraAPIError
 import json
@@ -683,3 +684,97 @@ async def test_list_tickets_by_creator_quotes_email():
     assert 'reporter="john@example.com"' in jql, (
         f"Expected quoted email in JQL, got: {jql}"
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.ci_critical
+async def test_list_tickets_with_type_filter():
+    """CI: Test list_tickets resolves type and builds correct JQL."""
+    mock_client = AsyncMock(spec=JiraClient)
+    mock_client.resolve_issue_type.return_value = "Program epic"
+    mock_client.search_issues.return_value = {
+        "issues": [
+            {
+                "key": "PROJ-100",
+                "fields": {
+                    "summary": "Auth Epic",
+                    "status": {"name": "In Progress"},
+                    "priority": {"name": "High"},
+                    "assignee": {"displayName": "John Doe"},
+                    "issuetype": {"name": "Program epic"},
+                    "created": "2025-01-01T00:00:00Z",
+                    "updated": "2025-01-15T00:00:00Z",
+                },
+            },
+        ],
+        "total": 1,
+    }
+
+    result = await handle_list_tickets({"project": "PROJ", "issue_type": "epic"}, mock_client)
+
+    mock_client.resolve_issue_type.assert_called_once_with("epic", "PROJ")
+
+    data = json.loads(result[0].text)
+    assert data["total"] == 1
+    assert data["resolved_type"] == "Program epic"
+    assert data["issues"][0]["key"] == "PROJ-100"
+
+    jql = mock_client.search_issues.call_args[1]["jql"]
+    assert 'issuetype = "Program epic"' in jql
+    assert 'project = "PROJ"' in jql
+
+
+@pytest.mark.asyncio
+async def test_list_tickets_without_type_filter():
+    """list_tickets without issue_type lists all tickets in the project."""
+    mock_client = AsyncMock(spec=JiraClient)
+    mock_client.search_issues.return_value = {"issues": [], "total": 0}
+
+    result = await handle_list_tickets({"project": "PROJ"}, mock_client)
+
+    mock_client.resolve_issue_type.assert_not_called()
+
+    data = json.loads(result[0].text)
+    assert data["total"] == 0
+    assert "resolved_type" not in data
+
+    jql = mock_client.search_issues.call_args[1]["jql"]
+    assert "issuetype" not in jql
+    assert 'project = "PROJ"' in jql
+
+
+@pytest.mark.asyncio
+async def test_create_issue_resolves_epic_type():
+    """create_issue with an epic-like issue_type resolves it via the client."""
+    mock_client = AsyncMock(spec=JiraClient)
+    mock_client.resolve_issue_type.return_value = "Program Epic"
+    mock_client.create_issue.return_value = {"key": "PROJ-42", "id": "42", "self": "..."}
+
+    result = await handle_create_issue(
+        {"summary": "New epic", "description": "desc", "issue_type": "epic", "project_key": "PROJ"},
+        mock_client,
+    )
+
+    mock_client.resolve_issue_type.assert_called_once_with("epic", "PROJ")
+    mock_client.create_issue.assert_called_once()
+    assert mock_client.create_issue.call_args[1]["issue_type"] == "Program Epic"
+
+    data = json.loads(result[0].text)
+    assert data["success"] is True
+    assert data["details"]["type"] == "Program Epic"
+
+
+@pytest.mark.asyncio
+async def test_create_issue_resolves_non_epic_type():
+    """create_issue resolves all types, not just epics."""
+    mock_client = AsyncMock(spec=JiraClient)
+    mock_client.resolve_issue_type.return_value = "Feature"
+    mock_client.create_issue.return_value = {"key": "PROJ-43", "id": "43", "self": "..."}
+
+    await handle_create_issue(
+        {"summary": "A task", "description": "desc", "issue_type": "feature", "project_key": "PROJ"},
+        mock_client,
+    )
+
+    mock_client.resolve_issue_type.assert_called_once_with("feature", "PROJ")
+    assert mock_client.create_issue.call_args[1]["issue_type"] == "Feature"

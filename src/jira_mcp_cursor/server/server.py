@@ -7,6 +7,7 @@ import logging
 
 from ..tools import (
     LIST_MY_TICKETS_TOOL,
+    LIST_TICKETS_TOOL,
     GET_TICKET_TOOL,
     GET_HIGHEST_PRIORITY_TICKET_TOOL,
     ANALYZE_TICKET_TOOL,
@@ -22,6 +23,7 @@ from ..tools import (
     DELETE_ISSUE_TOOL,
     GET_PROJECT_STATUSES_TOOL,
     handle_list_my_tickets,
+    handle_list_tickets,
     handle_get_ticket,
     handle_get_highest_priority_ticket,
     handle_analyze_ticket,
@@ -72,6 +74,7 @@ async def list_tools() -> list[Tool]:
     return [
         # Read operations
         LIST_MY_TICKETS_TOOL,
+        LIST_TICKETS_TOOL,
         LIST_TICKETS_BY_CREATOR_TOOL,
         GET_TICKET_TOOL,
         GET_HIGHEST_PRIORITY_TICKET_TOOL,
@@ -104,6 +107,8 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         # Read operations
         if name == "list_my_tickets":
             return await handle_list_my_tickets(arguments, client)
+        elif name == "list_tickets":
+            return await handle_list_tickets(arguments, client)
         elif name == "list_tickets_by_creator":
             return await handle_list_tickets_by_creator(arguments, client)
         elif name == "get_ticket":
@@ -140,12 +145,15 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             raise ValueError(f"Unknown tool: {name}")
     except Exception as e:
         logger.error(f"Error executing tool {name}: {str(e)}")
+        error_detail: dict[str, object] = {
+            "message": str(e),
+            "tool": name,
+        }
+        if hasattr(e, "details") and e.details:
+            error_detail["details"] = e.details
         error_response = {
             "success": False,
-            "error": {
-                "message": str(e),
-                "tool": name,
-            },
+            "error": error_detail,
         }
         import json
 

@@ -33,6 +33,7 @@ class JiraClient:
         self.auth = auth
         self.timeout = timeout
         self.max_retries = max_retries
+        self._project_types_cache: dict[str, list[str]] = {}
 
     async def _request(
         self,
@@ -487,6 +488,61 @@ class JiraClient:
             params["deleteSubtasks"] = "true"
 
         await self._request("DELETE", f"/issue/{issue_key}", params=params)
+
+    async def get_project_issue_types(self, project_key: str) -> list[str]:
+        """Return the issue type names available in a project (cached per project)."""
+        if project_key in self._project_types_cache:
+            return self._project_types_cache[project_key]
+
+        statuses = await self.get_project_statuses(project_key)
+        types = list(statuses.get("by_issue_type", {}).keys())
+        self._project_types_cache[project_key] = types
+        logger.info(f"Project {project_key} issue types: {types}")
+        return types
+
+    async def resolve_issue_type(self, requested_type: str, project_key: str) -> str:
+        """Resolve a user-provided issue type name against the project's actual types.
+
+        Tries exact match (case-insensitive) first, then falls back to single
+        substring match, and raises on ambiguity or no match.
+
+        Args:
+            requested_type: The type name the caller asked for (e.g. "epic",
+                "Program Epic", "story").
+            project_key: The project to resolve against.
+
+        Returns:
+            The canonical issue type name for the project.
+
+        Raises:
+            ValueError: When the name is ambiguous or unknown in the project.
+        """
+        project_types = await self.get_project_issue_types(project_key)
+
+        if not project_types:
+            raise ValueError(f"No issue types found in project {project_key}.")
+
+        requested_lower = requested_type.lower()
+
+        for t in project_types:
+            if t.lower() == requested_lower:
+                return t
+
+        matches = [t for t in project_types if requested_lower in t.lower()]
+
+        if len(matches) == 1:
+            return matches[0]
+
+        if len(matches) > 1:
+            raise ValueError(
+                f"Ambiguous issue type '{requested_type}' in project {project_key}. "
+                f"Matches: {matches}. Please specify exactly."
+            )
+
+        raise ValueError(
+            f"Issue type '{requested_type}' not found in project {project_key}. "
+            f"Available types: {project_types}."
+        )
 
     async def get_project_statuses(self, project_key: str) -> dict[str, Any]:
         """Get all available statuses for a project.
