@@ -20,6 +20,7 @@ from ..tools import (
     ASSIGN_ISSUE_TOOL,
     LIST_USERS_TOOL,
     LIST_TICKETS_BY_CREATOR_TOOL,
+    LINK_ISSUES_TOOL,
     DELETE_ISSUE_TOOL,
     GET_PROJECT_STATUSES_TOOL,
     handle_list_my_tickets,
@@ -36,6 +37,7 @@ from ..tools import (
     handle_assign_issue,
     handle_list_users,
     handle_list_tickets_by_creator,
+    handle_link_issues,
     handle_delete_issue,
     handle_get_project_statuses,
 )
@@ -91,6 +93,7 @@ async def list_tools() -> list[Tool]:
         UPDATE_TICKET_DESCRIPTION_TOOL,
         ADD_TICKET_COMMENT_TOOL,
         ASSIGN_ISSUE_TOOL,
+        LINK_ISSUES_TOOL,
         # Delete operations
         DELETE_ISSUE_TOOL,
     ]
@@ -138,6 +141,8 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             return await handle_add_ticket_comment(arguments, client)
         elif name == "assign_issue":
             return await handle_assign_issue(arguments, client)
+        elif name == "link_issues":
+            return await handle_link_issues(arguments, client)
         # Delete operations
         elif name == "delete_issue":
             return await handle_delete_issue(arguments, client)

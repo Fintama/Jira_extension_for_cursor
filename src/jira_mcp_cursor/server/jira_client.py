@@ -394,24 +394,29 @@ class JiraClient:
         inward_issue: str,
         outward_issue: str,
         link_type: str = "Relates",
+        comment: Optional[str] = None,
     ) -> dict[str, Any]:
         """Create a link between two issues.
 
         Args:
-            inward_issue: Key of inward issue
-            outward_issue: Key of outward issue
-            link_type: Type of link (Relates, Blocks, Clones, Duplicate, etc.)
+            inward_issue: Key of inward issue (e.g. "is blocked by")
+            outward_issue: Key of outward issue (e.g. "blocks")
+            link_type: Type of link (Relates, Blocks, Cloners, Duplicate, etc.)
+            comment: Optional comment to add to the outward (from) issue
 
         Returns:
-            Link creation result
+            Empty dict on success (API returns 201 with no body)
         """
         logger.info(f"Linking {outward_issue} {link_type} {inward_issue}")
 
-        payload = {
+        payload: dict[str, Any] = {
             "type": {"name": link_type},
             "inwardIssue": {"key": inward_issue},
             "outwardIssue": {"key": outward_issue},
         }
+
+        if comment:
+            payload["comment"] = {"body": comment}
 
         return await self._request("POST", "/issueLink", json=payload)
 

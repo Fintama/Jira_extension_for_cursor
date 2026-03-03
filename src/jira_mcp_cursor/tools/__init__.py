@@ -39,6 +39,7 @@ from .create_ticket import (
     handle_delete_issue,
     handle_get_project_statuses,
 )
+from .link_issues import LINK_ISSUES_TOOL, handle_link_issues
 
 __all__ = [
     # Read operations
@@ -75,6 +76,9 @@ __all__ = [
     "handle_add_ticket_comment",
     "ASSIGN_ISSUE_TOOL",
     "handle_assign_issue",
+    # Link operations
+    "LINK_ISSUES_TOOL",
+    "handle_link_issues",
     # Delete operations
     "DELETE_ISSUE_TOOL",
     "handle_delete_issue",

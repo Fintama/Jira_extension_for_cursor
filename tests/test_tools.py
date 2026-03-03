@@ -778,3 +778,91 @@ async def test_create_issue_resolves_non_epic_type():
 
     mock_client.resolve_issue_type.assert_called_once_with("feature", "PROJ")
     assert mock_client.create_issue.call_args[1]["issue_type"] == "Feature"
+
+
+# ── link_issues tests ──────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@pytest.mark.ci_critical
+async def test_link_issues_basic():
+    """CI: Test link_issues handler — golden path with defaults."""
+    from jira_mcp_cursor.tools.link_issues import handle_link_issues
+
+    mock_client = AsyncMock(spec=JiraClient)
+    mock_client.link_issues.return_value = {}
+
+    arguments = {
+        "inward_issue": "PROJ-2",
+        "outward_issue": "PROJ-1",
+    }
+
+    result = await handle_link_issues(arguments, mock_client)
+
+    mock_client.link_issues.assert_called_once_with(
+        inward_issue="PROJ-2",
+        outward_issue="PROJ-1",
+        link_type="Relates",
+        comment=None,
+    )
+
+    data = json.loads(result[0].text)
+    assert data["success"] is True
+    assert data["link_type"] == "Relates"
+    assert data["outward_issue"] == "PROJ-1"
+    assert data["inward_issue"] == "PROJ-2"
+    assert "comment" not in data
+
+
+@pytest.mark.asyncio
+async def test_link_issues_with_type_and_comment():
+    """Test link_issues with explicit link type and comment."""
+    from jira_mcp_cursor.tools.link_issues import handle_link_issues
+
+    mock_client = AsyncMock(spec=JiraClient)
+    mock_client.link_issues.return_value = {}
+
+    arguments = {
+        "inward_issue": "PROJ-2",
+        "outward_issue": "PROJ-1",
+        "link_type": "Blocks",
+        "comment": "Blocking due to API dependency",
+    }
+
+    result = await handle_link_issues(arguments, mock_client)
+
+    mock_client.link_issues.assert_called_once_with(
+        inward_issue="PROJ-2",
+        outward_issue="PROJ-1",
+        link_type="Blocks",
+        comment="Blocking due to API dependency",
+    )
+
+    data = json.loads(result[0].text)
+    assert data["success"] is True
+    assert data["link_type"] == "Blocks"
+    assert data["comment"] == "Blocking due to API dependency"
+    assert "PROJ-1" in data["message"]
+    assert "Blocks" in data["message"]
+    assert "PROJ-2" in data["message"]
+
+
+@pytest.mark.asyncio
+async def test_link_issues_propagates_api_error():
+    """Test that API errors from link_issues bubble up correctly."""
+    from jira_mcp_cursor.tools.link_issues import handle_link_issues
+
+    mock_client = AsyncMock(spec=JiraClient)
+    mock_client.link_issues.side_effect = JiraAPIError(
+        "Issue Does Not Exist", status_code=404
+    )
+
+    arguments = {
+        "inward_issue": "NONEXISTENT-999",
+        "outward_issue": "PROJ-1",
+    }
+
+    with pytest.raises(JiraAPIError) as exc_info:
+        await handle_link_issues(arguments, mock_client)
+
+    assert exc_info.value.status_code == 404

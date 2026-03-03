@@ -157,7 +157,7 @@ async def test_retry_on_rate_limit():
 
             # Should have retried after rate limit
             assert call_count["count"] == 2
-            assert result == {"issues": []}
+            assert result == {"issues": [], "total": 0}
 
 
 @pytest.mark.asyncio
